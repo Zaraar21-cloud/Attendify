@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+/* ─── Neubrutalist Design Tokens ──────────────────────────────────────────── */
+@theme inline {
+  /* Colors */
+  --color-cream: #F7F4E9;
+  --color-brutal-black: #050505;
+  --color-accent-yellow: #FFC700;
+  --color-card-green: #38C172;
+  --color-card-coral: #FF5A5F;
+  --color-card-blue: #4B82F6;
+  --color-card-lavender: #A855F7;
+
+  /* Box Shadows */
+  --shadow-brutal: 4px 4px 0px 0px #050505;
+  --shadow-brutal-sm: 2px 2px 0px 0px #050505;
+  --shadow-brutal-lg: 6px 6px 0px 0px #050505;
+  --shadow-brutal-active: 1px 1px 0px 0px #050505;
+
+  /* Typography */
+  --font-heading: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* ─── Base Styles ─────────────────────────────────────────────────────────── */
+body {
+  background: var(--color-cream);
+  color: var(--color-brutal-black);
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Custom Utilities ────────────────────────────────────────────────────── */
+.font-heading {
+  font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ─── Animations ──────────────────────────────────────────────────────────── */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-in {
+  animation: slideUp 0.2s ease-out;
+}
+
+.animate-fade {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* ─── Scrollbar Styling ───────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-cream);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-brutal-black);
+  border-radius: 4px;
+  border: 2px solid var(--color-cream);
+}
+
+/* ─── Selection ───────────────────────────────────────────────────────────── */
+::selection {
+  background: var(--color-accent-yellow);
+  color: var(--color-brutal-black);
+}
+
+/* ─── Input Number Spinners ───────────────────────────────────────────────── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
