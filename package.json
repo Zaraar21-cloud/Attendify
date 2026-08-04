@@ -1,7 +1,7 @@
 {
   "name": "attendify",
   "version": "1.0.0",
-  "description": "Smart College Attendance Calculator & Timetable Ingestion Engine featuring Neubrutalism UI and OCR.",
+  "description": "Class Attendance Calculator & Timetable Ingestion Engine featuring Neubrutalism UI and OCR.",
   "license": "MIT",
   "keywords": [
     "nextjs",

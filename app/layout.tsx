@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Attendify — Attendance Calculator & Timetable Manager",
   description:
-    "Upload your college timetable, track attendance, calculate safe bunk limits, and run what-if simulations. Built with a bold Neubrutalist design.",
+    "Upload your class timetable, track attendance, calculate safe bunk limits, and run what-if simulations. Built with a bold Neubrutalist design.",
 };
 
 export default function RootLayout({

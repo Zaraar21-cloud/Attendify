@@ -1,4 +1,4 @@
-# ⚡ Attendify — Smart Attendance Calculator & Timetable Ingestion
+# Attendify — Class Attendance Calculator & Timetable Ingestion
 
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react)](https://react.dev/)
@@ -6,21 +6,21 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-> A modern, client-side web application for college timetable OCR ingestion, attendance threshold calculation, and interactive "What-If" skip/attend simulation designed with a high-contrast Neubrutalism UI.
+> A modern, client-side web application for class timetable OCR ingestion, attendance threshold calculation, and interactive "What-If" skip/attend simulation designed with a high-contrast Neubrutalism UI.
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
-- 📷 **OCR Timetable Ingestion**: Upload a photo or screenshot of your weekly timetable. Automated parsing identifies daily time slots, labs, and subject sessions via client-side Tesseract.js OCR.
-- 📅 **Interactive Neubrutalist Grid**: Custom schedule editor allowing students to view, add, remove, or adjust weekly class slots with bold, high-contrast UI feedback.
-- 🎯 **Target Attendance Calculator**: Input current attendance (by ratio like `45/60` or percentage `75%`) and set your target goal to determine exact class attendance or safe skip allowances.
-- 🧪 **What-If Simulation Engine**: Test future attendance scenarios by toggling planned attendance across upcoming days and classes.
-- 🔒 **Privacy First**: 100% client-side execution. Timetable processing and attendance calculations run locally in the browser with no external backend storage.
+- **OCR Timetable Ingestion**: Upload a photo or screenshot of your weekly timetable. Automated parsing identifies daily time slots, labs, and subject sessions via client-side Tesseract.js OCR.
+- **Interactive Neubrutalist Grid**: Custom schedule editor allowing students to view, add, remove, or adjust weekly class slots with bold, high-contrast UI feedback.
+- **Target Attendance Calculator**: Input current attendance (by ratio like `45/60` or percentage `75%`) and set your target goal to determine exact class attendance or safe skip allowances.
+- **What-If Simulation Engine**: Test future attendance scenarios by toggling planned attendance across upcoming days and classes.
+- **Privacy First**: 100% client-side execution. Timetable processing and attendance calculations run locally in the browser with no external backend storage.
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 - **Framework**: [Next.js 16](https://nextjs.org/) (App Router, Turbopack)
 - **UI & Components**: [React 19](https://react.dev/)
@@ -30,7 +30,7 @@
 
 ---
 
-## 📦 Project Structure
+## Project Structure
 
 ```text
 Attendify/
@@ -57,7 +57,7 @@ Attendify/
 
 ---
 
-## 🏃 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -87,7 +87,7 @@ Attendify/
 
 ---
 
-## ⚙️ Available Scripts
+## Available Scripts
 
 - `npm run dev` — Starts the Next.js development server with Turbopack.
 - `npm run build` — Builds the application for production.
@@ -96,6 +96,6 @@ Attendify/
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

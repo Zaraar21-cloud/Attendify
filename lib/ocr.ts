@@ -2,13 +2,13 @@ import { type Timetable, type Weekday, WEEKDAYS, generateSlotId } from "./types"
 
 // ─── OCR Text → Timetable Parser ────────────────────────────────────────────
 //
-// College timetable images produce messy OCR output. This parser:
+// Class timetable images produce messy OCR output. This parser:
 // 1. Detects day headers (MON, TUE, etc.) to group lines by day
 // 2. Identifies subject codes (2-5 uppercase letters) as class slots
 // 3. Recognizes lab sessions (spans multiple periods)
 // 4. Assigns standard time slots based on slot count
 
-// Standard college time slots (8 periods)
+// Standard class time slots (8 periods)
 const DEFAULT_TIME_SLOTS = [
   { start: "09:00", end: "09:50" },
   { start: "09:50", end: "10:40" },

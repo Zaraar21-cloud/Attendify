@@ -8,7 +8,7 @@
 
 ## 1. Project Overview & Objective
 
-The **Attendify Attendance Calculator** is a modern, web-based application designed to streamline student timetable ingestion and attendance prediction. Users can upload a photo of their college timetable, review and edit an automatically abstracted weekly schedule (where slots default to generic `"Class"` labels until customized), enter their current attendance status, set a target attendance threshold, and run interactive "what-if" skip/attend simulations across specific days of the week.
+The **Attendify Attendance Calculator** is a modern, web-based application designed to streamline student timetable ingestion and attendance prediction. Users can upload a photo of their class timetable, review and edit an automatically abstracted weekly schedule (where slots default to generic `"Class"` labels until customized), enter their current attendance status, set a target attendance threshold, and run interactive "what-if" skip/attend simulations across specific days of the week.
 
 ---
 
@@ -29,7 +29,7 @@ The **Attendify Attendance Calculator** is a modern, web-based application desig
 
 ### Feature 1: Timetable Ingestion & Image Parsing (OCR)
 * **User Flow:**
-  1. User uploads an image file (PNG, JPG, WEBP) of their weekly college timetable.
+  1. User uploads an image file (PNG, JPG, WEBP) of their weekly class timetable.
   2. The system parses the image grid (Days of the Week: Monday–Friday/Saturday vs. Time Slots).
   3. **Abstracted Naming Rule:** Extracted slots MUST default to the generic label **`"Class"`** (or `"Class 1"`, `"Class 2"`) rather than attempting subject name recognition.
 * **Output:** A structured weekly schedule rendered in a Neubrutalist interactive grid.
