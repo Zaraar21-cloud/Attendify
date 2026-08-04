@@ -6,13 +6,33 @@ import { type TimeSlot, type Weekday, WEEKDAYS, generateSlotId } from "@/lib/typ
 import SlotEditModal from "./SlotEditModal";
 
 /** Shorten a slot label for compact display.
- *  ≤ 4 chars → show as-is.  Otherwise → first 3 chars + "." */
+ *  - Short codes (≤ 5 chars, e.g. "DBMS", "SE") → show as-is.
+ *  - Multi-word labels → first letter of each word (uppercase), e.g.
+ *    "DataBase Management Systems" → "DBMS".
+ *  - Lab classes → acronym + " Lab", e.g. "DataBase Management Systems Lab" → "DBMS Lab". */
 function shortenLabel(label: string): string {
   const trimmed = label.trim();
-  if (trimmed.length <= 4) return trimmed;
-  // If already all-uppercase (subject code like "DBMS"), take first 4 chars
-  if (/^[A-Z]+$/.test(trimmed)) return trimmed.slice(0, 4);
-  return trimmed.slice(0, 3) + ".";
+
+  // Already a short code (e.g. "DBMS", "SE", "Class")
+  if (trimmed.length <= 5) return trimmed;
+  // Already an all-uppercase code like "OOPJ"
+  if (/^[A-Z]{2,5}$/.test(trimmed)) return trimmed;
+
+  const words = trimmed.split(/\s+/);
+
+  // Single long word — just return it (e.g. a user-typed name)
+  if (words.length === 1) return trimmed;
+
+  // Check if it ends with "Lab" — separate it out
+  const isLab = words[words.length - 1].toLowerCase() === "lab";
+  const coreWords = isLab ? words.slice(0, -1) : words;
+
+  // Build acronym from first letter of each core word
+  const acronym = coreWords
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return isLab ? `${acronym} Lab` : acronym;
 }
 
 export default function TimetableGrid() {

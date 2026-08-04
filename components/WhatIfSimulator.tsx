@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useAttendify } from "@/lib/context";
 import { type Weekday, type TimeSlot, WEEKDAYS } from "@/lib/types";
 import {
@@ -9,6 +9,7 @@ import {
   simulateMixed,
   simulateClassChanges,
   classesOnDay,
+  classesNeededForTarget,
 } from "@/lib/engine";
 
 type DayMode = "neutral" | "skip" | "attend";
@@ -18,6 +19,27 @@ type BrushMode = "skip" | "attend";
 export default function WhatIfSimulator() {
   const { state } = useAttendify();
   const { attendance, timetable } = state;
+
+  const modeToggleRef = useRef<HTMLDivElement>(null);
+  const [showFloatingBrush, setShowFloatingBrush] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowFloatingBrush(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+      },
+      { threshold: 0, rootMargin: "-10px 0px 0px 0px" }
+    );
+
+    const currentRef = modeToggleRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+    
+    return () => {
+      if (currentRef) observer.unobserve(currentRef);
+    };
+  }, []);
 
   const [dayModes, setDayModes] = useState<Record<Weekday, DayMode>>(
     () =>
@@ -31,21 +53,187 @@ export default function WhatIfSimulator() {
   const [brushMode, setBrushMode] = useState<BrushMode>("skip");
   // Per-class skip/attend modes (keyed by slot id)
   const [classModes, setClassModes] = useState<Record<string, ClassMode>>({});
+  // Month simulator modes (keyed by day number)
+  const [monthModes, setMonthModes] = useState<Record<number, ClassMode>>({});
 
-  // Click a day: toggle it with the active brush
-  const toggleDay = useCallback(
-    (day: Weekday) => {
-      setDayModes((prev) => {
-        // If already set to the active brush, un-set it (back to neutral)
-        if (prev[day] === brushMode) {
-          return { ...prev, [day]: "neutral" };
+  // Month details
+  const todayDate = useMemo(() => new Date(), []);
+  const currentYear = todayDate.getFullYear();
+  const currentMonth = todayDate.getMonth();
+  const currentDate = todayDate.getDate();
+  const currentHour = todayDate.getHours();
+
+  const daysInMonth = useMemo(() => new Date(currentYear, currentMonth + 1, 0).getDate(), [currentYear, currentMonth]);
+  const monthDays = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth]);
+
+  const isDayDisabled = useCallback((dayNum: number) => {
+    const date = new Date(currentYear, currentMonth, dayNum);
+    const dayOfWeek = date.getDay(); // 0 is Sunday, 6 is Saturday
+
+    if (dayNum < currentDate) return true; // Past day
+    if (dayNum === currentDate && currentHour >= 16) return true; // Past 4 PM today
+    if (dayOfWeek === 0) return true; // Sunday
+
+    if (dayOfWeek === 6) {
+      // 2nd or 4th Saturday
+      const weekOfMonth = Math.ceil(dayNum / 7);
+      if (weekOfMonth === 2 || weekOfMonth === 4) return true;
+    }
+
+    return false;
+  }, [currentYear, currentMonth, currentDate, currentHour]);
+
+  const targetRequiredClasses = useMemo(() => {
+    if (attendance.totalCount === 0) return 0;
+    return classesNeededForTarget(
+      attendance.attendedCount,
+      attendance.totalCount,
+      attendance.targetPercentage
+    );
+  }, [attendance]);
+
+  const requiredDaysToHighlight = useMemo(() => {
+    if (targetRequiredClasses <= 0) return new Set<number>();
+
+    let classesGathered = 0;
+    const requiredDays = new Set<number>();
+
+    const WEEKDAY_MAP: Record<number, Weekday> = {
+      1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday",
+    };
+
+    for (let dayNum = currentDate; dayNum <= daysInMonth; dayNum++) {
+      if (isDayDisabled(dayNum)) continue; // skip disabled days (past days, sundays, etc)
+
+      const date = new Date(currentYear, currentMonth, dayNum);
+      const dayOfWeekIndex = date.getDay();
+      const weekdayName = WEEKDAY_MAP[dayOfWeekIndex];
+
+      if (weekdayName) {
+        const classCount = classesOnDay(timetable, weekdayName);
+        if (classCount > 0) {
+          requiredDays.add(dayNum);
+          classesGathered += classCount;
+          if (classesGathered >= targetRequiredClasses) {
+            break;
+          }
         }
-        // Otherwise set it to the active brush
+      }
+    }
+
+    return requiredDays;
+  }, [targetRequiredClasses, currentDate, daysInMonth, isDayDisabled, currentYear, currentMonth, timetable]);
+
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const [dragAction, setDragAction] = useState<"paint" | "erase" | null>(null);
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsMouseDown(false);
+      setDragAction(null);
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => window.removeEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  const handleDayMouseDown = useCallback((dayNum: number) => {
+    if (isDayDisabled(dayNum)) return;
+    setIsMouseDown(true);
+    
+    setMonthModes((prev) => {
+      const current = prev[dayNum] ?? "neutral";
+      const action = current === brushMode ? "erase" : "paint";
+      setDragAction(action);
+      
+      if (action === "erase") {
+        const next = { ...prev };
+        delete next[dayNum];
+        return next;
+      }
+      return { ...prev, [dayNum]: brushMode };
+    });
+  }, [brushMode, isDayDisabled]);
+
+  const handleDayMouseEnter = useCallback((dayNum: number) => {
+    if (!isMouseDown || isDayDisabled(dayNum) || !dragAction) return;
+    
+    setMonthModes((prev) => {
+      if (dragAction === "erase") {
+        if (prev[dayNum] === brushMode) {
+          const next = { ...prev };
+          delete next[dayNum];
+          return next;
+        }
+        return prev;
+      } else {
+        if (prev[dayNum] === brushMode) return prev;
+        return { ...prev, [dayNum]: brushMode };
+      }
+    });
+  }, [isMouseDown, dragAction, brushMode, isDayDisabled]);
+
+  const selectAllSelectableDays = useCallback(() => {
+    setMonthModes((prev) => {
+      const next = { ...prev };
+      for (let i = 1; i <= daysInMonth; i++) {
+        if (!isDayDisabled(i)) {
+          next[i] = "attend";
+        }
+      }
+      return next;
+    });
+  }, [daysInMonth, isDayDisabled]);
+
+  const monthSimClasses = useMemo(() => {
+    let skipped = 0;
+    let attended = 0;
+    const WEEKDAY_MAP: Record<number, Weekday> = {
+      1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday",
+    };
+
+    for (const [dayStr, mode] of Object.entries(monthModes)) {
+      const dayNum = parseInt(dayStr, 10);
+      const date = new Date(currentYear, currentMonth, dayNum);
+      const dayOfWeekIndex = date.getDay();
+
+      const weekdayName = WEEKDAY_MAP[dayOfWeekIndex];
+      if (weekdayName) {
+        const classCount = classesOnDay(timetable, weekdayName);
+        if (mode === "skip") skipped += classCount;
+        else if (mode === "attend") attended += classCount;
+      }
+    }
+    return { skipped, attended };
+  }, [monthModes, currentYear, currentMonth, timetable]);
+
+  // --- Weekly Classes Swipe Handlers ---
+  const handleWeeklyMouseDown = useCallback((day: Weekday, disabled: boolean) => {
+    if (disabled) return;
+    setIsMouseDown(true);
+    setDayModes((prev) => {
+      const current = prev[day] ?? "neutral";
+      const action = current === brushMode ? "erase" : "paint";
+      setDragAction(action);
+      
+      if (action === "erase") {
+        return { ...prev, [day]: "neutral" };
+      }
+      return { ...prev, [day]: brushMode };
+    });
+  }, [brushMode]);
+
+  const handleWeeklyMouseEnter = useCallback((day: Weekday, disabled: boolean) => {
+    if (!isMouseDown || disabled || !dragAction) return;
+    setDayModes((prev) => {
+      if (dragAction === "erase") {
+        if (prev[day] === brushMode) return { ...prev, [day]: "neutral" };
+        return prev;
+      } else {
+        if (prev[day] === brushMode) return prev;
         return { ...prev, [day]: brushMode };
-      });
-    },
-    [brushMode]
-  );
+      }
+    });
+  }, [isMouseDown, dragAction, brushMode]);
 
   // Quick select: Skip Today
   const skipToday = useCallback(() => {
@@ -95,6 +283,7 @@ export default function WhatIfSimulator() {
       >
     );
     setClassModes({});
+    setMonthModes({});
   }, []);
 
   // Derive skip/attend day lists
@@ -122,21 +311,39 @@ export default function WhatIfSimulator() {
   const todayName = WEEKDAY_MAP[todayIndex] ?? null;
   const todaySlots: TimeSlot[] = todayName ? (timetable[todayName] ?? []) : [];
 
-  const toggleClass = useCallback(
-    (slotId: string) => {
-      setClassModes((prev) => {
-        const current = prev[slotId] ?? "neutral";
-        if (current === brushMode) {
-          // Toggle off → neutral
+  // --- Today's Classes Swipe Handlers ---
+  const handleClassMouseDown = useCallback((slotId: string) => {
+    setIsMouseDown(true);
+    setClassModes((prev) => {
+      const current = prev[slotId] ?? "neutral";
+      const action = current === brushMode ? "erase" : "paint";
+      setDragAction(action);
+      
+      if (action === "erase") {
+        const next = { ...prev };
+        delete next[slotId];
+        return next;
+      }
+      return { ...prev, [slotId]: brushMode };
+    });
+  }, [brushMode]);
+
+  const handleClassMouseEnter = useCallback((slotId: string) => {
+    if (!isMouseDown || !dragAction) return;
+    setClassModes((prev) => {
+      if (dragAction === "erase") {
+        if (prev[slotId] === brushMode) {
           const next = { ...prev };
           delete next[slotId];
           return next;
         }
+        return prev;
+      } else {
+        if (prev[slotId] === brushMode) return prev;
         return { ...prev, [slotId]: brushMode };
-      });
-    },
-    [brushMode]
-  );
+      }
+    });
+  }, [isMouseDown, dragAction, brushMode]);
 
   // Derive per-class skip/attend counts
   const classSkippedCount = useMemo(
@@ -148,6 +355,8 @@ export default function WhatIfSimulator() {
     [classModes]
   );
 
+  const hasPerClassSelection = Object.values(classModes).some(m => m !== "neutral");
+  const hasMonthSelection = Object.values(monthModes).some(m => m !== "neutral");
   const hasClassSelection = classSkippedCount > 0 || classAttendedCount > 0;
 
   const hasSelection = skippedDays.length > 0 || attendedDays.length > 0;
@@ -176,6 +385,17 @@ export default function WhatIfSimulator() {
     );
   }, [hasClassSelection, attendance, timetable, classSkippedCount, classAttendedCount]);
 
+  // Run month-level simulation
+  const monthSimulation = useMemo(() => {
+    if (!hasMonthSelection || attendance.totalCount === 0) return null;
+    return simulateClassChanges(
+      attendance,
+      timetable,
+      monthSimClasses.skipped,
+      monthSimClasses.attended
+    );
+  }, [hasMonthSelection, attendance, timetable, monthSimClasses]);
+
   const hasData = attendance.totalCount > 0;
 
   return (
@@ -189,14 +409,13 @@ export default function WhatIfSimulator() {
 
       <div className="rounded-lg border-[3px] border-brutal-black bg-white shadow-brutal p-5">
         {/* Mode Toggle — Skip or Attend brush */}
-        <div className="flex mb-4 rounded-md border-[3px] border-brutal-black overflow-hidden">
+        <div ref={modeToggleRef} className="flex mb-4 rounded-md border-[3px] border-brutal-black overflow-hidden">
           <button
             onClick={() => setBrushMode("skip")}
             className={`flex-1 py-2 font-mono text-sm font-bold transition-colors
-              ${
-                brushMode === "skip"
-                  ? "bg-card-coral text-white"
-                  : "bg-white text-brutal-black/50 hover:bg-cream"
+              ${brushMode === "skip"
+                ? "bg-card-coral text-white"
+                : "bg-white text-brutal-black/50 hover:bg-cream"
               }`}
           >
             🚫 Skip
@@ -204,10 +423,9 @@ export default function WhatIfSimulator() {
           <button
             onClick={() => setBrushMode("attend")}
             className={`flex-1 py-2 font-mono text-sm font-bold border-l-[3px] border-brutal-black transition-colors
-              ${
-                brushMode === "attend"
-                  ? "bg-card-green text-white"
-                  : "bg-white text-brutal-black/50 hover:bg-cream"
+              ${brushMode === "attend"
+                ? "bg-card-green text-white"
+                : "bg-white text-brutal-black/50 hover:bg-cream"
               }`}
           >
             ✓ Attend
@@ -241,24 +459,46 @@ export default function WhatIfSimulator() {
           )}
         </div>
 
-        {/* Day Toggles */}
+        {/* Weekly Classes Section */}
+        <div className="mb-4">
+          <h3 className="font-heading text-base font-extrabold text-brutal-black flex items-center gap-2 mb-3">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md border-[2px] border-brutal-black bg-accent-pink text-white text-[10px] font-mono font-bold shadow-brutal-sm">
+              🗓️
+            </span>
+            Weekly Classes
+          </h3>
+          <p className="font-mono text-xs text-brutal-black/50 mb-3">
+            Simulate attending or skipping days for the current week.
+          </p>
+        </div>
+
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-5">
           {WEEKDAYS.map((day) => {
             const classes = classesOnDay(timetable, day);
             const mode = dayModes[day];
-            const disabled = classes === 0;
 
-            // Determine if this day is before today in the current week
             const WEEKDAY_INDEX: Record<Weekday, number> = {
-              Monday: 1,
-              Tuesday: 2,
-              Wednesday: 3,
-              Thursday: 4,
-              Friday: 5,
-              Saturday: 6,
+              Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6,
             };
             const currentDayIndex = new Date().getDay(); // 0=Sun, 1=Mon...6=Sat
-            const isPast = currentDayIndex > 0 && WEEKDAY_INDEX[day] < currentDayIndex;
+            const isToday = currentDayIndex === WEEKDAY_INDEX[day];
+            const isPast = (currentDayIndex > 0 && WEEKDAY_INDEX[day] < currentDayIndex) || (isToday && currentHour >= 16);
+
+            let isWeeklyDisabled = classes === 0;
+
+            // Grey out 2nd and 4th Saturday for the weekly view
+            if (day === "Saturday") {
+              const diffToSat = 6 - currentDayIndex;
+              const satDate = new Date(currentYear, currentMonth, currentDate + diffToSat);
+              if (satDate.getMonth() === currentMonth) {
+                const weekOfMonth = Math.ceil(satDate.getDate() / 7);
+                if (weekOfMonth === 2 || weekOfMonth === 4) {
+                  isWeeklyDisabled = true;
+                }
+              }
+            }
+
+            const disabled = isWeeklyDisabled;
 
             let bgClass: string;
             if (mode === "skip") {
@@ -274,10 +514,11 @@ export default function WhatIfSimulator() {
             return (
               <button
                 key={day}
-                onClick={() => toggleDay(day)}
+                onMouseDown={() => handleWeeklyMouseDown(day, disabled)}
+                onMouseEnter={() => handleWeeklyMouseEnter(day, disabled)}
                 disabled={disabled}
                 className={`rounded-md border-[3px] border-brutal-black py-3 px-2
-                           font-mono text-sm font-bold transition-all relative overflow-hidden
+                           font-mono text-sm font-bold transition-all relative overflow-hidden select-none
                   ${bgClass}`}
               >
                 <span className="block text-sm">{day.slice(0, 3)}</span>
@@ -358,11 +599,10 @@ export default function WhatIfSimulator() {
                   New %
                 </p>
                 <p
-                  className={`font-heading text-2xl font-extrabold ${
-                    simulation.newPercentage >= attendance.targetPercentage
-                      ? "text-card-green"
-                      : "text-card-coral"
-                  }`}
+                  className={`font-heading text-2xl font-extrabold ${simulation.newPercentage >= attendance.targetPercentage
+                    ? "text-card-green"
+                    : "text-card-coral"
+                    }`}
                 >
                   {simulation.newPercentage.toFixed(1)}%
                 </p>
@@ -372,9 +612,8 @@ export default function WhatIfSimulator() {
                   Change
                 </p>
                 <p
-                  className={`font-heading text-2xl font-extrabold ${
-                    simulation.delta >= 0 ? "text-card-green" : "text-card-coral"
-                  }`}
+                  className={`font-heading text-2xl font-extrabold ${simulation.delta >= 0 ? "text-card-green" : "text-card-coral"
+                    }`}
                 >
                   {simulation.delta >= 0 ? "+" : ""}
                   {simulation.delta.toFixed(1)}%
@@ -400,11 +639,10 @@ export default function WhatIfSimulator() {
 
             {/* Impact Message */}
             <div
-              className={`rounded-md border-[3px] border-brutal-black px-4 py-3 font-mono text-sm font-medium ${
-                simulation.newPercentage >= attendance.targetPercentage
-                  ? "bg-card-green/10 text-card-green"
-                  : "bg-card-coral/10 text-card-coral"
-              }`}
+              className={`rounded-md border-[3px] border-brutal-black px-4 py-3 font-mono text-sm font-medium ${simulation.newPercentage >= attendance.targetPercentage
+                ? "bg-card-green/10 text-card-green"
+                : "bg-card-coral/10 text-card-coral"
+                }`}
             >
               {simulation.message}
             </div>
@@ -451,9 +689,10 @@ export default function WhatIfSimulator() {
                 return (
                   <button
                     key={slot.id}
-                    onClick={() => toggleClass(slot.id)}
+                    onMouseDown={() => handleClassMouseDown(slot.id)}
+                    onMouseEnter={() => handleClassMouseEnter(slot.id)}
                     className={`rounded-md border-[3px] border-brutal-black py-2.5 px-2
-                               font-mono text-sm font-bold transition-all relative overflow-hidden
+                               font-mono text-sm font-bold transition-all relative overflow-hidden select-none
                       ${bgClass}`}
                   >
                     <span className="block text-xs font-extrabold truncate" title={slot.label}>
@@ -479,7 +718,7 @@ export default function WhatIfSimulator() {
             </div>
 
             {/* Class-level selection summary */}
-            {hasClassSelection && (
+            {hasPerClassSelection && (
               <div className="flex flex-wrap gap-2 mb-4">
                 {todaySlots
                   .filter((s) => classModes[s.id] === "skip")
@@ -537,11 +776,10 @@ export default function WhatIfSimulator() {
                       New %
                     </p>
                     <p
-                      className={`font-heading text-2xl font-extrabold ${
-                        classSimulation.newPercentage >= attendance.targetPercentage
-                          ? "text-card-green"
-                          : "text-card-coral"
-                      }`}
+                      className={`font-heading text-2xl font-extrabold ${classSimulation.newPercentage >= attendance.targetPercentage
+                        ? "text-card-green"
+                        : "text-card-coral"
+                        }`}
                     >
                       {classSimulation.newPercentage.toFixed(1)}%
                     </p>
@@ -551,9 +789,8 @@ export default function WhatIfSimulator() {
                       Change
                     </p>
                     <p
-                      className={`font-heading text-2xl font-extrabold ${
-                        classSimulation.delta >= 0 ? "text-card-green" : "text-card-coral"
-                      }`}
+                      className={`font-heading text-2xl font-extrabold ${classSimulation.delta >= 0 ? "text-card-green" : "text-card-coral"
+                        }`}
                     >
                       {classSimulation.delta >= 0 ? "+" : ""}
                       {classSimulation.delta.toFixed(1)}%
@@ -578,11 +815,10 @@ export default function WhatIfSimulator() {
                 </div>
 
                 <div
-                  className={`rounded-md border-[3px] border-brutal-black px-4 py-3 font-mono text-sm font-medium ${
-                    classSimulation.newPercentage >= attendance.targetPercentage
-                      ? "bg-card-green/10 text-card-green"
-                      : "bg-card-coral/10 text-card-coral"
-                  }`}
+                  className={`rounded-md border-[3px] border-brutal-black px-4 py-3 font-mono text-sm font-medium ${classSimulation.newPercentage >= attendance.targetPercentage
+                    ? "bg-card-green/10 text-card-green"
+                    : "bg-card-coral/10 text-card-coral"
+                    }`}
                 >
                   {classSimulation.message}
                 </div>
@@ -590,12 +826,204 @@ export default function WhatIfSimulator() {
             ) : hasData && !hasClassSelection ? (
               <div className="rounded-md border-[2px] border-dashed border-brutal-black/20 py-4 text-center">
                 <p className="font-mono text-xs text-brutal-black/40">
-                  Tap classes above to simulate per-class impact
+                  Tap classes above or select days in the month to simulate impact
                 </p>
               </div>
             ) : null}
           </div>
         )}
+
+        {/* ─── Month Simulator Section ─────────────────────────────────────── */}
+        <div className="mt-6 pt-5 border-t-[3px] border-brutal-black/10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h3 className="font-heading text-base font-extrabold text-brutal-black flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md border-[2px] border-brutal-black bg-accent-blue text-white text-[10px] font-mono font-bold shadow-brutal-sm">
+                🗓️
+              </span>
+              Monthly Classes
+              <span className="ml-auto sm:ml-2 rounded-md border-[2px] border-brutal-black bg-cream px-2 py-0.5 font-mono text-[10px] font-bold text-brutal-black/60">
+                {todayDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </span>
+            </h3>
+
+            <button
+              onClick={selectAllSelectableDays}
+              className="rounded-md border-[2px] border-brutal-black bg-card-green/10 px-3 py-1.5
+                         font-mono text-xs font-bold text-card-green hover:bg-card-green hover:text-white transition-colors self-start sm:self-auto"
+            >
+              ✓ Select All to Attend
+            </button>
+          </div>
+
+          <p className="font-mono text-xs text-brutal-black/50 mb-3">
+            Simulate attending or skipping upcoming days this month.
+          </p>
+
+          <div className="max-w-[280px] sm:max-w-[320px] mx-auto mt-2 mb-6">
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-2">
+              {/* Weekday Headers */}
+              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+                <div key={d} className="text-center font-mono text-[10px] font-bold text-brutal-black/50">
+                  {d}
+                </div>
+              ))}
+
+              {/* Empty slots for start of month */}
+              {Array.from({ length: new Date(currentYear, currentMonth, 1).getDay() }).map((_, i) => (
+                <div key={`empty-${i}`} />
+              ))}
+
+              {/* Days */}
+              {monthDays.map((dayNum) => {
+                const disabled = isDayDisabled(dayNum);
+                const mode = monthModes[dayNum] ?? "neutral";
+                const isRequired = requiredDaysToHighlight.has(dayNum);
+
+                let bgClass: string;
+                if (mode === "skip") {
+                  bgClass = "bg-card-coral text-white shadow-brutal-sm";
+                } else if (mode === "attend") {
+                  bgClass = "bg-card-green text-white shadow-brutal-sm";
+                } else if (isRequired) {
+                  bgClass = "bg-orange-200 text-brutal-black hover:border-orange-400 hover:shadow-brutal-sm";
+                } else {
+                  bgClass = disabled
+                    ? "bg-cream/50 text-brutal-black/20 cursor-not-allowed"
+                    : "bg-white text-brutal-black hover:bg-card-lavender/10";
+                }
+
+                return (
+                  <button
+                    key={dayNum}
+                    onMouseDown={() => handleDayMouseDown(dayNum)}
+                    onMouseEnter={() => handleDayMouseEnter(dayNum)}
+                    disabled={disabled}
+                    className={`relative aspect-square rounded-md border-[2px] border-brutal-black flex flex-col items-center justify-center font-mono transition-all select-none
+                    ${bgClass}`}
+                  >
+                    <span className="text-sm font-extrabold">{dayNum}</span>
+                    {!disabled && mode !== "neutral" && (
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border-[1px] border-brutal-black bg-white">
+                        {mode === "skip" ? (
+                          <span className="text-[6px] text-card-coral">🚫</span>
+                        ) : (
+                          <span className="text-[6px] text-card-green">✓</span>
+                        )}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Legend */}
+          {requiredDaysToHighlight.size > 0 && (
+            <div className="flex items-center gap-2 mb-4 max-w-[280px] sm:max-w-[320px] mx-auto">
+              <span className="block h-3 w-3 rounded-sm bg-orange-200 border border-brutal-black"></span>
+              <span className="font-mono text-[10px] font-bold text-brutal-black/70">
+                Required to attend to secure target
+              </span>
+            </div>
+          )}
+
+          {/* Month-level selection summary */}
+          {hasMonthSelection && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {Object.entries(monthModes).map(([dayStr, mode]) => {
+                const dayNum = parseInt(dayStr, 10);
+                if (mode === "neutral") return null;
+                return (
+                  <span
+                    key={dayStr}
+                    className={`inline-flex items-center gap-1 rounded-md border-[2px] px-2 py-0.5 font-mono text-[10px] font-bold ${mode === "skip"
+                      ? "border-card-coral bg-card-coral/10 text-card-coral"
+                      : "border-card-green bg-card-green/10 text-card-green"
+                      }`}
+                  >
+                    {mode === "skip" ? "🚫" : "✓"} {dayNum} {new Date(currentYear, currentMonth, dayNum).toLocaleString('default', { month: 'short' })}
+                    <button
+                      onClick={() =>
+                        setMonthModes((prev) => {
+                          const next = { ...prev };
+                          delete next[dayNum];
+                          return next;
+                        })
+                      }
+                      className="ml-0.5 hover:text-brutal-black transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Month-level Simulation Results */}
+          {hasData && monthSimulation ? (
+            <div className="rounded-lg border-[3px] border-brutal-black bg-cream p-4 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    New %
+                  </p>
+                  <p
+                    className={`font-heading text-2xl font-extrabold ${monthSimulation.newPercentage >= attendance.targetPercentage
+                      ? "text-card-green"
+                      : "text-card-coral"
+                      }`}
+                  >
+                    {monthSimulation.newPercentage.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Change
+                  </p>
+                  <p
+                    className={`font-heading text-2xl font-extrabold ${monthSimulation.delta >= 0 ? "text-card-green" : "text-card-coral"
+                      }`}
+                  >
+                    {monthSimulation.delta >= 0 ? "+" : ""}
+                    {monthSimulation.delta.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Extra Classes
+                  </p>
+                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
+                    {monthSimulation.extraClassesNeeded}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Extra Days
+                  </p>
+                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
+                    {monthSimulation.extraDaysNeeded}
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className={`rounded-md border-[3px] border-brutal-black px-4 py-3 font-mono text-sm font-medium ${monthSimulation.newPercentage >= attendance.targetPercentage
+                  ? "bg-card-green/10 text-card-green"
+                  : "bg-card-coral/10 text-card-coral"
+                  }`}
+              >
+                {monthSimulation.message}
+              </div>
+            </div>
+          ) : hasData && !hasMonthSelection ? (
+            <div className="rounded-md border-[2px] border-dashed border-brutal-black/20 py-4 text-center mb-4">
+              <p className="font-mono text-xs text-brutal-black/40">
+                Select days in the month calendar to see the impact
+              </p>
+            </div>
+          ) : null}
+        </div>
 
         {/* No classes today message */}
         {todayName && todaySlots.length === 0 && (
@@ -630,6 +1058,39 @@ export default function WhatIfSimulator() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Floating Brush Toggle */}
+      <div
+        className={`fixed bottom-6 right-6 z-50 flex flex-col gap-2 rounded-md border-[3px] border-brutal-black bg-white p-2 shadow-brutal transition-all duration-300 ${
+          showFloatingBrush
+            ? "translate-y-0 opacity-100"
+            : "translate-y-10 opacity-0 pointer-events-none"
+        }`}
+      >
+        <p className="text-center font-mono text-[10px] font-bold text-brutal-black/50 uppercase mb-1">
+          Brush Mode
+        </p>
+        <button
+          onClick={() => setBrushMode("skip")}
+          className={`flex h-10 w-24 items-center justify-center rounded-md border-[2px] border-brutal-black font-mono text-xs font-bold transition-colors ${
+            brushMode === "skip"
+              ? "bg-card-coral text-white"
+              : "bg-white text-brutal-black/50 hover:bg-cream"
+          }`}
+        >
+          🚫 Skip
+        </button>
+        <button
+          onClick={() => setBrushMode("attend")}
+          className={`flex h-10 w-24 items-center justify-center rounded-md border-[2px] border-brutal-black font-mono text-xs font-bold transition-colors ${
+            brushMode === "attend"
+              ? "bg-card-green text-white"
+              : "bg-white text-brutal-black/50 hover:bg-cream"
+          }`}
+        >
+          ✓ Attend
+        </button>
       </div>
     </section>
   );

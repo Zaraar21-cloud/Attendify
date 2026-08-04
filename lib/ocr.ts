@@ -30,13 +30,22 @@ const DAY_PATTERNS: { day: Weekday; regex: RegExp }[] = [
   { day: "Saturday", regex: /\bSAT(?:URDAY)?\b/i },
 ];
 
+// Classes to automatically ignore (removed from parsed timetable)
+export const IGNORED_CLASSES = new Set([
+  "library",
+  "nptel",
+  "sports",
+]);
+
 // Words that are NOT subject codes (lab name components, common noise)
 const NOISE_WORDS = new Set([
-  "lunch", "break", "recess", "free", "library",
+  "lunch", "break", "recess", "free",
   "lab", "tutorial", "practical", "through", "oriented",
   "programming", "management", "systems", "engineering",
   "computational", "mathematics", "database", "object",
   "software", "java", "data", "base",
+  // Ignored class names (also noise for subject code detection)
+  "library", "nptel", "sports",
   // Common OCR artifacts
   "eno", "ww", "ow", "lt", "ty",
 ]);
@@ -179,6 +188,19 @@ function extractSlots(text: string): string[] {
 }
 
 /**
+ * Check if a slot label matches an ignored class name.
+ * Checks the full label and individual words (case-insensitive).
+ */
+function isIgnoredClass(label: string): boolean {
+  const lower = label.toLowerCase().trim();
+  // Exact match (e.g. "Library", "NPTEL", "Sports")
+  if (IGNORED_CLASSES.has(lower)) return true;
+  // Check individual words (e.g. lab names containing "Library")
+  const words = lower.split(/\s+/);
+  return words.some((w) => IGNORED_CLASSES.has(w));
+}
+
+/**
  * Parse raw OCR text into a Timetable structure.
  */
 export function parseOcrText(rawText: string): Timetable {
@@ -293,9 +315,14 @@ export function parseOcrText(rawText: string): Timetable {
 
     for (let i = 0; i < slotLabels.length && i < DEFAULT_TIME_SLOTS.length; i++) {
       const timeSlot = DEFAULT_TIME_SLOTS[i];
+      const label = slotLabels[i];
+
+      // Skip ignored classes (Library, NPTEL, Sports)
+      if (isIgnoredClass(label)) continue;
+
       timetable[day as Weekday].push({
         id: generateSlotId(),
-        label: slotLabels[i],
+        label,
         startTime: timeSlot.start,
         endTime: timeSlot.end,
       });
