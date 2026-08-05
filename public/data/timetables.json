@@ -1,0 +1,30 @@
+[
+  {
+    "year": "2nd",
+    "branch": "CSE",
+    "section": "A",
+    "timetable": {
+      "Monday": [
+        { "id": "demo-mon-1", "label": "DSA", "startTime": "09:00", "endTime": "09:50" },
+        { "id": "demo-mon-2", "label": "DSA", "startTime": "09:50", "endTime": "10:40" },
+        { "id": "demo-mon-3", "label": "COA", "startTime": "10:40", "endTime": "11:30" },
+        { "id": "demo-mon-4", "label": "DBMS", "startTime": "11:30", "endTime": "12:20" }
+      ],
+      "Tuesday": [
+        { "id": "demo-tue-1", "label": "OS", "startTime": "09:00", "endTime": "09:50" },
+        { "id": "demo-tue-2", "label": "Math", "startTime": "09:50", "endTime": "10:40" }
+      ],
+      "Wednesday": [
+        { "id": "demo-wed-1", "label": "DBMS Lab", "startTime": "09:00", "endTime": "11:30" }
+      ],
+      "Thursday": [
+        { "id": "demo-thu-1", "label": "COA", "startTime": "10:40", "endTime": "11:30" },
+        { "id": "demo-thu-2", "label": "DSA", "startTime": "11:30", "endTime": "12:20" }
+      ],
+      "Friday": [
+        { "id": "demo-fri-1", "label": "OS", "startTime": "09:00", "endTime": "09:50" }
+      ],
+      "Saturday": []
+    }
+  }
+]

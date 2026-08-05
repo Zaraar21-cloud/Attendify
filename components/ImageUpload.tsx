@@ -1,15 +1,38 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useAttendify } from "@/lib/context";
+
+const getAvailableSections = (year: string, branch: string): string[] => {
+  if (year === "2nd") {
+    switch (branch) {
+      case "CSE": return ["A", "B", "C", "D", "E", "F", "G", "H", "I"];
+      case "AIML": return ["A", "B", "C", "D", "E"];
+      case "IT": return ["A", "B", "C", "D"];
+      case "ECE": return ["A", "B", "C", "D", "E", "F", "G"];
+      case "DS": return ["A", "B", "C"];
+      case "ME":
+      case "CIVIL":
+      case "CS":
+      case "EEE":
+        return ["-"]; // Un-named or single section
+    }
+  }
+  // Default fallback for other years
+  return ["A", "B", "C"];
+};
 
 interface ImageUploadProps {
   onImageParsed: (text: string) => void;
+  onTimetableFetched?: (timetable: any) => void;
   isProcessing: boolean;
   setIsProcessing: (v: boolean) => void;
 }
 
 export default function ImageUpload({
   onImageParsed,
+  onTimetableFetched,
   isProcessing,
   setIsProcessing,
 }: ImageUploadProps) {
@@ -17,6 +40,108 @@ export default function ImageUpload({
   const [preview, setPreview] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const { state } = useAttendify();
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Dropdown states
+  const [year, setYear] = useState<string>("1st");
+  const [branch, setBranch] = useState<string>("CSE");
+  const [section, setSection] = useState<string>("A");
+  const [isFetching, setIsFetching] = useState(false);
+
+  const availableSections = useMemo(() => getAvailableSections(year, branch), [year, branch]);
+
+  // Ensure section is valid for the current year/branch
+  useEffect(() => {
+    if (!availableSections.includes(section)) {
+      setSection(availableSections[0]);
+    }
+  }, [availableSections, section]);
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("attendify-dropdowns");
+      if (saved) {
+        const { year, branch, section } = JSON.parse(saved);
+        if (year) setYear(year);
+        if (branch) setBranch(branch);
+        if (section) setSection(section);
+      }
+    } catch (e) {
+      console.error("Failed to load dropdown selections", e);
+    }
+  }, []);
+
+  // Save to localStorage on change
+  useEffect(() => {
+    localStorage.setItem(
+      "attendify-dropdowns",
+      JSON.stringify({ year, branch, section })
+    );
+  }, [year, branch, section]);
+
+  const handleFetchTimetable = async () => {
+    setIsFetching(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const { data, error: fetchError } = await supabase
+        .from("class_timetables")
+        .select("timetable")
+        .eq("year", year)
+        .eq("branch", branch)
+        .eq("section", section)
+        .single();
+
+      if (fetchError) {
+        if (fetchError.code === "PGRST116") {
+          setError(`No timetable found for ${year} Year, ${branch}, Section ${section}.`);
+        } else {
+          throw fetchError;
+        }
+      } else if (data) {
+        if (onTimetableFetched) {
+          onTimetableFetched(data.timetable);
+          setSuccessMsg("Timetable loaded successfully!");
+          setTimeout(() => setSuccessMsg(null), 3000);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Error connecting to the database.");
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  const handleSaveTimetable = async () => {
+    setIsSaving(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const { error: upsertError } = await supabase
+        .from("class_timetables")
+        .upsert({
+          year,
+          branch,
+          section,
+          timetable: state.timetable,
+        }, { onConflict: 'year, branch, section' });
+
+      if (upsertError) throw upsertError;
+      
+      setSuccessMsg("Timetable saved to database successfully!");
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to save timetable to database.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const processFile = useCallback(
     async (file: File) => {
@@ -84,6 +209,64 @@ export default function ImageUpload({
         </span>
         Upload Timetable
       </h2>
+
+      {/* Fetch Section */}
+      <div className="mb-6 rounded-lg border-[3px] border-brutal-black bg-cream p-5 shadow-brutal">
+        <p className="font-mono text-sm font-bold text-brutal-black mb-3">
+          Fetch existing timetable:
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <select
+            value={year}
+            onChange={(e) => setYear(e.target.value)}
+            className="rounded-md border-[2px] border-brutal-black px-3 py-2 font-mono text-sm shadow-sm"
+          >
+            <option value="1st">1st Year</option>
+            <option value="2nd">2nd Year</option>
+            <option value="3rd">3rd Year</option>
+            <option value="4th">4th Year</option>
+          </select>
+          <select
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            className="rounded-md border-[2px] border-brutal-black px-3 py-2 font-mono text-sm shadow-sm"
+          >
+            <option value="CSE">CSE</option>
+            <option value="AIML">AIML</option>
+            <option value="IT">IT</option>
+            <option value="DS">DS</option>
+            <option value="CS">CS</option>
+            <option value="ECE">ECE</option>
+            <option value="EEE">EEE</option>
+            <option value="ME">ME</option>
+            <option value="CIVIL">CIVIL</option>
+          </select>
+          <select
+            value={section}
+            onChange={(e) => setSection(e.target.value)}
+            className="rounded-md border-[2px] border-brutal-black px-3 py-2 font-mono text-sm shadow-sm"
+          >
+            {availableSections.map((sec) => (
+              <option key={sec} value={sec}>
+                {sec === "-" ? "-" : `Section ${sec}`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={handleFetchTimetable}
+          disabled={isFetching}
+          className="w-full rounded-md border-[3px] border-brutal-black bg-accent-yellow px-4 py-2 font-mono text-sm font-bold shadow-brutal-sm transition-all hover:translate-y-[-2px] hover:shadow-brutal disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-brutal-sm"
+        >
+          {isFetching ? "Fetching..." : "Fetch Timetable"}
+        </button>
+      </div>
+
+      <div className="flex items-center gap-4 mb-6">
+        <div className="h-[2px] flex-1 bg-brutal-black/10"></div>
+        <span className="font-mono text-xs font-bold text-brutal-black/40">OR UPLOAD IMAGE</span>
+        <div className="h-[2px] flex-1 bg-brutal-black/10"></div>
+      </div>
 
       <div
         onDragOver={(e) => {
@@ -163,9 +346,28 @@ export default function ImageUpload({
         )}
       </div>
 
+      {/* Save Button for parsed timetable */}
+      {preview && !isProcessing && (
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={handleSaveTimetable}
+            disabled={isSaving}
+            className="rounded-md border-[3px] border-brutal-black bg-card-green px-4 py-2 font-mono text-sm font-bold shadow-brutal-sm transition-all hover:translate-y-[-2px] hover:shadow-brutal disabled:opacity-50"
+          >
+            {isSaving ? "Saving..." : "Save Current Timetable to Database"}
+          </button>
+        </div>
+      )}
+
       {error && (
-        <div className="mt-3 rounded-md border-[3px] border-card-coral bg-card-coral/10 px-4 py-2 font-mono text-sm font-medium text-card-coral">
+        <div className="mt-4 rounded-md border-[3px] border-card-coral bg-card-coral/10 px-4 py-2 font-mono text-sm font-medium text-card-coral">
           {error}
+        </div>
+      )}
+      
+      {successMsg && (
+        <div className="mt-4 rounded-md border-[3px] border-card-green bg-card-green/10 px-4 py-2 font-mono text-sm font-medium text-card-green">
+          {successMsg}
         </div>
       )}
     </section>

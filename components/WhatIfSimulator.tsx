@@ -127,15 +127,6 @@ export default function WhatIfSimulator() {
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [dragAction, setDragAction] = useState<"paint" | "erase" | null>(null);
 
-  useEffect(() => {
-    const handleMouseUp = () => {
-      setIsMouseDown(false);
-      setDragAction(null);
-    };
-    window.addEventListener("mouseup", handleMouseUp);
-    return () => window.removeEventListener("mouseup", handleMouseUp);
-  }, []);
-
   const handleDayMouseDown = useCallback((dayNum: number) => {
     if (isDayDisabled(dayNum)) return;
     setIsMouseDown(true);
@@ -345,6 +336,51 @@ export default function WhatIfSimulator() {
     });
   }, [isMouseDown, dragAction, brushMode]);
 
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsMouseDown(false);
+      setDragAction(null);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isMouseDown) return;
+      const touch = e.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      if (!target) return;
+
+      const buttonTarget = target.closest("button");
+      if (buttonTarget) {
+        const weeklyDay = buttonTarget.getAttribute("data-weekly-day");
+        if (weeklyDay) {
+          const disabled = buttonTarget.hasAttribute("data-disabled");
+          handleWeeklyMouseEnter(weeklyDay as Weekday, disabled);
+          return;
+        }
+
+        const classSlot = buttonTarget.getAttribute("data-class-slot");
+        if (classSlot) {
+          handleClassMouseEnter(classSlot);
+          return;
+        }
+
+        const monthDay = buttonTarget.getAttribute("data-month-day");
+        if (monthDay) {
+          handleDayMouseEnter(parseInt(monthDay, 10));
+          return;
+        }
+      }
+    };
+
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("touchend", handleMouseUp);
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    return () => {
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("touchend", handleMouseUp);
+      window.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, [isMouseDown, handleWeeklyMouseEnter, handleClassMouseEnter, handleDayMouseEnter]);
+
   // Derive per-class skip/attend counts
   const classSkippedCount = useMemo(
     () => Object.values(classModes).filter((m) => m === "skip").length,
@@ -395,6 +431,45 @@ export default function WhatIfSimulator() {
       monthSimClasses.attended
     );
   }, [hasMonthSelection, attendance, timetable, monthSimClasses]);
+
+  const requiredDaysSimulation = useMemo(() => {
+    if (requiredDaysToHighlight.size === 0 || attendance.totalCount === 0) return null;
+    let attended = 0;
+    const WEEKDAY_MAP: Record<number, Weekday> = {
+      1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday",
+    };
+    for (const dayNum of requiredDaysToHighlight) {
+      const date = new Date(currentYear, currentMonth, dayNum);
+      const weekdayName = WEEKDAY_MAP[date.getDay()];
+      if (weekdayName) {
+        attended += classesOnDay(timetable, weekdayName);
+      }
+    }
+    const sim = simulateClassChanges(
+      attendance,
+      timetable,
+      0, // skipped
+      attended
+    );
+    return {
+      ...sim,
+      attendedClasses: attended,
+    };
+  }, [requiredDaysToHighlight, attendance, timetable, currentYear, currentMonth]);
+
+  const allSelectableDaysSelected = useMemo(() => {
+    let selectableCount = 0;
+    let selectedCount = 0;
+    for (let i = 1; i <= daysInMonth; i++) {
+      if (!isDayDisabled(i)) {
+        selectableCount++;
+        if (monthModes[i] === "attend") {
+          selectedCount++;
+        }
+      }
+    }
+    return selectableCount > 0 && selectableCount === selectedCount;
+  }, [daysInMonth, isDayDisabled, monthModes]);
 
   const hasData = attendance.totalCount > 0;
 
@@ -472,7 +547,7 @@ export default function WhatIfSimulator() {
           </p>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-5">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-5 touch-none">
           {WEEKDAYS.map((day) => {
             const classes = classesOnDay(timetable, day);
             const mode = dayModes[day];
@@ -516,6 +591,12 @@ export default function WhatIfSimulator() {
                 key={day}
                 onMouseDown={() => handleWeeklyMouseDown(day, disabled)}
                 onMouseEnter={() => handleWeeklyMouseEnter(day, disabled)}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  handleWeeklyMouseDown(day, disabled);
+                }}
+                data-weekly-day={day}
+                {...(disabled ? { "data-disabled": "true" } : {})}
                 disabled={disabled}
                 className={`rounded-md border-[3px] border-brutal-black py-3 px-2
                            font-mono text-sm font-bold transition-all relative overflow-hidden select-none
@@ -673,7 +754,7 @@ export default function WhatIfSimulator() {
             </p>
 
             {/* Class Toggles */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4 touch-none">
               {todaySlots.map((slot, idx) => {
                 const mode = classModes[slot.id] ?? "neutral";
 
@@ -691,6 +772,11 @@ export default function WhatIfSimulator() {
                     key={slot.id}
                     onMouseDown={() => handleClassMouseDown(slot.id)}
                     onMouseEnter={() => handleClassMouseEnter(slot.id)}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      handleClassMouseDown(slot.id);
+                    }}
+                    data-class-slot={slot.id}
                     className={`rounded-md border-[3px] border-brutal-black py-2.5 px-2
                                font-mono text-sm font-bold transition-all relative overflow-hidden select-none
                       ${bgClass}`}
@@ -846,20 +932,33 @@ export default function WhatIfSimulator() {
               </span>
             </h3>
 
-            <button
-              onClick={selectAllSelectableDays}
-              className="rounded-md border-[2px] border-brutal-black bg-card-green/10 px-3 py-1.5
-                         font-mono text-xs font-bold text-card-green hover:bg-card-green hover:text-white transition-colors self-start sm:self-auto"
-            >
-              ✓ Select All to Attend
-            </button>
+            <div className="flex gap-2 self-start sm:self-auto">
+              {hasMonthSelection && (
+                <button
+                  onClick={() => setMonthModes({})}
+                  className="rounded-md border-[2px] border-brutal-black bg-cream px-3 py-1.5
+                             font-mono text-xs font-bold text-brutal-black/60 hover:bg-brutal-black hover:text-white transition-colors"
+                >
+                  ✕ Clear
+                </button>
+              )}
+              {!allSelectableDaysSelected && (
+                <button
+                  onClick={selectAllSelectableDays}
+                  className="rounded-md border-[2px] border-brutal-black bg-card-green/10 px-3 py-1.5
+                             font-mono text-xs font-bold text-card-green hover:bg-card-green hover:text-white transition-colors"
+                >
+                  ✓ Select All to Attend
+                </button>
+              )}
+            </div>
           </div>
 
           <p className="font-mono text-xs text-brutal-black/50 mb-3">
             Simulate attending or skipping upcoming days this month.
           </p>
 
-          <div className="max-w-[280px] sm:max-w-[320px] mx-auto mt-2 mb-6">
+          <div className="max-w-[280px] sm:max-w-[320px] mx-auto mt-2 mb-6 touch-none">
             <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-2">
               {/* Weekday Headers */}
               {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
@@ -897,6 +996,11 @@ export default function WhatIfSimulator() {
                     key={dayNum}
                     onMouseDown={() => handleDayMouseDown(dayNum)}
                     onMouseEnter={() => handleDayMouseEnter(dayNum)}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      handleDayMouseDown(dayNum);
+                    }}
+                    data-month-day={dayNum}
                     disabled={disabled}
                     className={`relative aspect-square rounded-md border-[2px] border-brutal-black flex flex-col items-center justify-center font-mono transition-all select-none
                     ${bgClass}`}
@@ -1014,6 +1118,56 @@ export default function WhatIfSimulator() {
                   }`}
               >
                 {monthSimulation.message}
+              </div>
+            </div>
+          ) : hasData && !hasMonthSelection && requiredDaysSimulation ? (
+            <div className="rounded-lg border-[3px] border-brutal-black bg-orange-50 p-4 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Expected %
+                  </p>
+                  <p
+                    className={`font-heading text-2xl font-extrabold ${requiredDaysSimulation.newPercentage >= attendance.targetPercentage
+                      ? "text-orange-500"
+                      : "text-card-coral"
+                      }`}
+                  >
+                    {requiredDaysSimulation.newPercentage.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Change
+                  </p>
+                  <p
+                    className={`font-heading text-2xl font-extrabold ${requiredDaysSimulation.delta >= 0 ? "text-orange-500" : "text-card-coral"
+                      }`}
+                  >
+                    {requiredDaysSimulation.delta >= 0 ? "+" : ""}
+                    {requiredDaysSimulation.delta.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Classes
+                  </p>
+                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
+                    +{requiredDaysSimulation.attendedClasses}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Days
+                  </p>
+                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
+                    +{requiredDaysToHighlight.size}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-md border-[3px] border-brutal-black px-4 py-3 font-mono text-sm font-medium bg-orange-100 text-orange-700">
+                <span className="font-bold">Required Days Impact:</span> {requiredDaysSimulation.message}
               </div>
             </div>
           ) : hasData && !hasMonthSelection ? (

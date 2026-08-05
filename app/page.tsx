@@ -36,6 +36,7 @@ function AttendifyApp() {
           <div className="animate-fade">
             <ImageUpload
               onImageParsed={handleImageParsed}
+              onTimetableFetched={setTimetable}
               isProcessing={isProcessing}
               setIsProcessing={setIsProcessing}
             />
