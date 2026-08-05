@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState, useEffect } from "react";
 import { useAttendify } from "@/lib/context";
 import { calculateAll } from "@/lib/engine";
 
-const PRESET_TARGETS = [75, 80, 85, 90];
+const PRESET_TARGETS = [65, 75, 80, 85];
 
 export default function TargetCalculator() {
   const { state, setTarget } = useAttendify();
@@ -17,18 +17,37 @@ export default function TargetCalculator() {
 
   const hasData = attendance.totalCount > 0;
 
+  const [inputValue, setInputValue] = useState(attendance.targetPercentage.toString());
+
+  useEffect(() => {
+    if (inputValue === "" && attendance.targetPercentage === 65) return;
+    const parsed = parseFloat(inputValue);
+    if (isNaN(parsed) || parsed !== attendance.targetPercentage) {
+      setInputValue(attendance.targetPercentage.toString());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attendance.targetPercentage]);
+
   const handlePresetClick = useCallback(
     (target: number) => {
       setTarget(target);
+      setInputValue(target.toString());
     },
     [setTarget]
   );
 
   const handleCustomTarget = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = parseFloat(e.target.value);
-      if (!isNaN(val) && val >= 0 && val <= 100) {
-        setTarget(val);
+      const valStr = e.target.value;
+      setInputValue(valStr);
+
+      if (valStr === "") {
+        setTarget(65);
+      } else {
+        const val = parseFloat(valStr);
+        if (!isNaN(val) && val >= 0 && val <= 100) {
+          setTarget(val);
+        }
       }
     },
     [setTarget]
@@ -71,8 +90,9 @@ export default function TargetCalculator() {
                 min={1}
                 max={100}
                 step={1}
-                value={attendance.targetPercentage}
+                value={inputValue}
                 onChange={handleCustomTarget}
+                placeholder="65"
                 className="w-24 rounded-md border-[3px] border-brutal-black px-3 py-2 pr-8
                            font-mono text-sm font-bold
                            focus:outline-none focus:ring-2 focus:ring-accent-yellow focus:border-accent-yellow

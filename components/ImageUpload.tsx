@@ -28,6 +28,7 @@ interface ImageUploadProps {
   onTimetableFetched?: (timetable: any) => void;
   isProcessing: boolean;
   setIsProcessing: (v: boolean) => void;
+  allowSave?: boolean;
 }
 
 export default function ImageUpload({
@@ -35,6 +36,7 @@ export default function ImageUpload({
   onTimetableFetched,
   isProcessing,
   setIsProcessing,
+  allowSave = false,
 }: ImageUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -162,14 +164,19 @@ export default function ImageUpload({
 
       try {
         // Dynamically import Tesseract.js for client-side OCR
-        const { recognize } = await import("tesseract.js");
-        const {
-          data: { text },
-        } = await recognize(file, "eng", {
+        const { createWorker, PSM } = await import("tesseract.js");
+        const worker = await createWorker("eng", 1, {
           logger: (m: { status: string; progress: number }) => {
             console.log(`[OCR] ${m.status}: ${(m.progress * 100).toFixed(0)}%`);
           },
         });
+        await worker.setParameters({
+          tessedit_pageseg_mode: PSM.SINGLE_COLUMN, // "Assume a single column of text of variable sizes" - Great for tables
+        });
+        const {
+          data: { text },
+        } = await worker.recognize(file);
+        await worker.terminate();
         onImageParsed(text);
       } catch (err) {
         console.error("OCR failed:", err);
@@ -200,6 +207,27 @@ export default function ImageUpload({
     },
     [processFile]
   );
+
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            processFile(file);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [processFile]);
 
   return (
     <section id="image-upload" className="w-full">
@@ -336,10 +364,10 @@ export default function ImageUpload({
             </div>
             <div className="text-center">
               <p className="font-heading text-lg font-bold text-brutal-black">
-                Drop your timetable image here
+                Drop or paste your timetable image here
               </p>
               <p className="font-mono text-sm text-brutal-black/50 mt-1">
-                PNG, JPG, or WEBP • Click to browse
+                PNG, JPG, or WEBP • Click, drop, or Ctrl+V
               </p>
             </div>
           </div>
@@ -347,7 +375,7 @@ export default function ImageUpload({
       </div>
 
       {/* Save Button for parsed timetable */}
-      {preview && !isProcessing && (
+      {allowSave && preview && !isProcessing && (
         <div className="mt-4 flex justify-end">
           <button
             onClick={handleSaveTimetable}

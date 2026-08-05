@@ -24,9 +24,9 @@ const DEFAULT_TIME_SLOTS = [
 const DAY_PATTERNS: { day: Weekday; regex: RegExp }[] = [
   { day: "Monday", regex: /\bMON(?:DAY)?\b/i },
   { day: "Tuesday", regex: /\bTUE(?:S(?:DAY)?)?\b/i },
-  { day: "Wednesday", regex: /\bWED(?:NES(?:DAY)?)?\b/i },
-  { day: "Thursday", regex: /\bTHU(?:RS(?:DAY)?)?\b/i },
-  { day: "Friday", regex: /\bFRI(?:DAY)?\b/i },
+  { day: "Wednesday", regex: /\b(?:WED(?:NES(?:DAY)?)?|VED|VEN)\b/i },
+  { day: "Thursday", regex: /\b(?:THU(?:RS(?:DAY)?)?|TH)\b/i },
+  { day: "Friday", regex: /\b(?:FRI(?:DAY)?|FR)\b/i },
   { day: "Saturday", regex: /\bSAT(?:URDAY)?\b/i },
 ];
 
@@ -98,7 +98,7 @@ function isSubjectCode(word: string): boolean {
 function extractLabs(text: string): { labs: { label: string, index: number }[]; cleaned: string } {
   // Match lab patterns: one or more title-case/lowercase words followed by "Lab"
   // The words before "Lab" must be descriptive (not 2-4 char uppercase subject codes).
-  const labRegex = /(?:(?:[A-Z][A-Za-z]{2,}|[a-z]{3,})\s+)+Lab(?:[\s-]*\d*)?/g;
+  const labRegex = /(?:(?:(?![A-Z]+\b)[A-Za-z]{3,})\s+)+Lab(?:[\s-]*\d*)?/g;
 
   const labs: { label: string, index: number }[] = [];
   let match;

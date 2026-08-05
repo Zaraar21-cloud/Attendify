@@ -82,15 +82,41 @@ export default function WhatIfSimulator() {
 
     return false;
   }, [currentYear, currentMonth, currentDate, currentHour]);
+  const monthSimClasses = useMemo(() => {
+    let skipped = 0;
+    let attended = 0;
+    const WEEKDAY_MAP: Record<number, Weekday> = {
+      1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday",
+    };
+
+    for (const [dayStr, mode] of Object.entries(monthModes)) {
+      const dayNum = parseInt(dayStr, 10);
+      const date = new Date(currentYear, currentMonth, dayNum);
+      const dayOfWeekIndex = date.getDay();
+
+      const weekdayName = WEEKDAY_MAP[dayOfWeekIndex];
+      if (weekdayName) {
+        const classCount = classesOnDay(timetable, weekdayName);
+        if (mode === "skip") skipped += classCount;
+        else if (mode === "attend") attended += classCount;
+      }
+    }
+    return { skipped, attended };
+  }, [monthModes, currentYear, currentMonth, timetable]);
+
 
   const targetRequiredClasses = useMemo(() => {
     if (attendance.totalCount === 0) return 0;
+    
+    const simAttended = attendance.attendedCount + monthSimClasses.attended;
+    const simTotal = attendance.totalCount + monthSimClasses.attended + monthSimClasses.skipped;
+
     return classesNeededForTarget(
-      attendance.attendedCount,
-      attendance.totalCount,
+      simAttended,
+      simTotal,
       attendance.targetPercentage
     );
-  }, [attendance]);
+  }, [attendance, monthSimClasses]);
 
   const requiredDaysToHighlight = useMemo(() => {
     if (targetRequiredClasses <= 0) return new Set<number>();
@@ -104,6 +130,7 @@ export default function WhatIfSimulator() {
 
     for (let dayNum = currentDate; dayNum <= daysInMonth; dayNum++) {
       if (isDayDisabled(dayNum)) continue; // skip disabled days (past days, sundays, etc)
+      if (monthModes[dayNum] !== "neutral" && monthModes[dayNum] !== undefined) continue; // skip days already manually selected
 
       const date = new Date(currentYear, currentMonth, dayNum);
       const dayOfWeekIndex = date.getDay();
@@ -122,7 +149,7 @@ export default function WhatIfSimulator() {
     }
 
     return requiredDays;
-  }, [targetRequiredClasses, currentDate, daysInMonth, isDayDisabled, currentYear, currentMonth, timetable]);
+  }, [targetRequiredClasses, currentDate, daysInMonth, isDayDisabled, currentYear, currentMonth, timetable, monthModes]);
 
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [dragAction, setDragAction] = useState<"paint" | "erase" | null>(null);
@@ -175,27 +202,6 @@ export default function WhatIfSimulator() {
     });
   }, [daysInMonth, isDayDisabled]);
 
-  const monthSimClasses = useMemo(() => {
-    let skipped = 0;
-    let attended = 0;
-    const WEEKDAY_MAP: Record<number, Weekday> = {
-      1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday",
-    };
-
-    for (const [dayStr, mode] of Object.entries(monthModes)) {
-      const dayNum = parseInt(dayStr, 10);
-      const date = new Date(currentYear, currentMonth, dayNum);
-      const dayOfWeekIndex = date.getDay();
-
-      const weekdayName = WEEKDAY_MAP[dayOfWeekIndex];
-      if (weekdayName) {
-        const classCount = classesOnDay(timetable, weekdayName);
-        if (mode === "skip") skipped += classCount;
-        else if (mode === "attend") attended += classCount;
-      }
-    }
-    return { skipped, attended };
-  }, [monthModes, currentYear, currentMonth, timetable]);
 
   // --- Weekly Classes Swipe Handlers ---
   const handleWeeklyMouseDown = useCallback((day: Weekday, disabled: boolean) => {
@@ -589,12 +595,8 @@ export default function WhatIfSimulator() {
             return (
               <button
                 key={day}
-                onMouseDown={() => handleWeeklyMouseDown(day, disabled)}
-                onMouseEnter={() => handleWeeklyMouseEnter(day, disabled)}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  handleWeeklyMouseDown(day, disabled);
-                }}
+                onPointerDown={() => handleWeeklyMouseDown(day, disabled)}
+                onPointerEnter={() => handleWeeklyMouseEnter(day, disabled)}
                 data-weekly-day={day}
                 {...(disabled ? { "data-disabled": "true" } : {})}
                 disabled={disabled}
@@ -770,12 +772,8 @@ export default function WhatIfSimulator() {
                 return (
                   <button
                     key={slot.id}
-                    onMouseDown={() => handleClassMouseDown(slot.id)}
-                    onMouseEnter={() => handleClassMouseEnter(slot.id)}
-                    onTouchStart={(e) => {
-                      e.preventDefault();
-                      handleClassMouseDown(slot.id);
-                    }}
+                    onPointerDown={() => handleClassMouseDown(slot.id)}
+                    onPointerEnter={() => handleClassMouseEnter(slot.id)}
                     data-class-slot={slot.id}
                     className={`rounded-md border-[3px] border-brutal-black py-2.5 px-2
                                font-mono text-sm font-bold transition-all relative overflow-hidden select-none
@@ -994,12 +992,8 @@ export default function WhatIfSimulator() {
                 return (
                   <button
                     key={dayNum}
-                    onMouseDown={() => handleDayMouseDown(dayNum)}
-                    onMouseEnter={() => handleDayMouseEnter(dayNum)}
-                    onTouchStart={(e) => {
-                      e.preventDefault();
-                      handleDayMouseDown(dayNum);
-                    }}
+                    onPointerDown={() => handleDayMouseDown(dayNum)}
+                    onPointerEnter={() => handleDayMouseEnter(dayNum)}
                     data-month-day={dayNum}
                     disabled={disabled}
                     className={`relative aspect-square rounded-md border-[2px] border-brutal-black flex flex-col items-center justify-center font-mono transition-all select-none

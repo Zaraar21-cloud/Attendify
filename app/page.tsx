@@ -32,13 +32,14 @@ function AttendifyApp() {
       <Header />
       <main className="flex-1 w-full">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-col gap-10">
-          {/* Upload Section */}
+          {/* Fetch Section */}
           <div className="animate-fade">
             <ImageUpload
               onImageParsed={handleImageParsed}
               onTimetableFetched={setTimetable}
               isProcessing={isProcessing}
               setIsProcessing={setIsProcessing}
+              allowSave={false}
             />
             <div className="mt-3 text-center">
               <span className="font-mono text-xs text-brutal-black/40">
@@ -51,8 +52,6 @@ function AttendifyApp() {
               >
                 Load a demo timetable
               </button>
-              <br></br>
-              <span className="font-bold font-mono text-xs text-brutal-black/40">The OCR parsing is not perfect, so please verify the timetable after uploading and make changes.</span>
             </div>
           </div>
 
