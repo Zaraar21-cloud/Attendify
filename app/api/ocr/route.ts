@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     const pythonScriptPath = path.resolve(process.cwd(), "better_ocr.py");
 
     // Execute python script
-    return new Promise((resolve) => {
+    return new Promise<NextResponse>((resolve) => {
       exec(
         `python "${pythonScriptPath}" "${tempFilePath}" --json`,
         {
