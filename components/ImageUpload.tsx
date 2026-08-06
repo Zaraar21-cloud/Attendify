@@ -24,7 +24,7 @@ const getAvailableSections = (year: string, branch: string): string[] => {
 };
 
 interface ImageUploadProps {
-  onImageParsed: (text: string) => void;
+  onImageParsed: (data: any) => void;
   onTimetableFetched?: (timetable: any) => void;
   isProcessing: boolean;
   setIsProcessing: (v: boolean) => void;
@@ -164,21 +164,24 @@ export default function ImageUpload({
       reader.readAsDataURL(file);
 
       try {
-        // Dynamically import Tesseract.js for client-side OCR
-        const { createWorker, PSM } = await import("tesseract.js");
-        const worker = await createWorker("eng", 1, {
-          logger: (m: { status: string; progress: number }) => {
-            console.log(`[OCR] ${m.status}: ${(m.progress * 100).toFixed(0)}%`);
-          },
+        const formData = new FormData();
+        formData.append("image", file);
+
+        const response = await fetch("/api/ocr", {
+          method: "POST",
+          body: formData,
         });
-        await worker.setParameters({
-          tessedit_pageseg_mode: PSM.AUTO, // Fully automatic page segmentation (better for grids)
-        });
-        const {
-          data: { text },
-        } = await worker.recognize(file);
-        await worker.terminate();
-        onImageParsed(text);
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error || "OCR failed on the server.");
+        }
+
+        const jsonResponse = await response.json();
+        // Since we changed OCR to return JSON data (2D string array), we pass the structured data.
+        // We will need to update onImageParsed in the parent component to expect any type temporarily or change its signature.
+        // For now, let's pass the jsonResponse.data (which is string[][]).
+        onImageParsed(jsonResponse.data);
       } catch (err) {
         console.error("OCR failed:", err);
         setError(

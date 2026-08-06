@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { AttendifyProvider, useAttendify } from "@/lib/context";
-import { parseOcrText } from "@/lib/ocr";
+import { parseStructuredOcr } from "@/lib/ocr";
 import Header from "@/components/Header";
 import ImageUpload from "@/components/ImageUpload";
 import TimetableGrid from "@/components/TimetableGrid";
@@ -12,8 +12,8 @@ function AdminApp() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleImageParsed = useCallback(
-    (text: string) => {
-      const parsed = parseOcrText(text);
+    (data: string[][]) => {
+      const parsed = parseStructuredOcr(data);
       setTimetable(parsed);
     },
     [setTimetable]
@@ -60,6 +60,56 @@ function AdminApp() {
 }
 
 export default function AdminPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  if (!isAuthenticated) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-cream p-4">
+        <form
+          className="flex w-full max-w-sm flex-col gap-4 rounded-md border-[3px] border-brutal-black bg-white p-6 shadow-brutal"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (username === "admin" && password === "zar@123") {
+              setIsAuthenticated(true);
+            } else {
+              setError("Invalid credentials");
+            }
+          }}
+        >
+          <h1 className="font-heading text-2xl font-black text-brutal-black text-center mb-2">Admin Login</h1>
+          {error && <p className="font-mono text-sm font-bold text-card-coral text-center">{error}</p>}
+          <div className="flex flex-col gap-1">
+            <label className="font-mono text-sm font-bold text-brutal-black">Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="rounded-md border-[2px] border-brutal-black p-2 font-mono outline-none focus:border-card-blue focus:ring-2 focus:ring-card-blue/20"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="font-mono text-sm font-bold text-brutal-black">Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="rounded-md border-[2px] border-brutal-black p-2 font-mono outline-none focus:border-card-blue focus:ring-2 focus:ring-card-blue/20"
+            />
+          </div>
+          <button
+            type="submit"
+            className="mt-4 rounded-md border-[3px] border-brutal-black bg-accent-yellow p-2 font-heading font-black text-brutal-black transition-transform hover:-translate-y-1 hover:shadow-brutal-lg active:translate-y-0 active:shadow-none"
+          >
+            Login
+          </button>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <AttendifyProvider>
       <AdminApp />

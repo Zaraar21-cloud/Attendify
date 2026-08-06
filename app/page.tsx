@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { AttendifyProvider, useAttendify } from "@/lib/context";
-import { parseOcrText, createDemoTimetable } from "@/lib/ocr";
+import { parseStructuredOcr, createDemoTimetable } from "@/lib/ocr";
 import Header from "@/components/Header";
 import ImageUpload from "@/components/ImageUpload";
 import TimetableGrid from "@/components/TimetableGrid";
@@ -15,8 +15,8 @@ function AttendifyApp() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleImageParsed = useCallback(
-    (text: string) => {
-      const parsed = parseOcrText(text);
+    (data: string[][]) => {
+      const parsed = parseStructuredOcr(data);
       setTimetable(parsed);
     },
     [setTimetable]

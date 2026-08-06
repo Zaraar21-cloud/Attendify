@@ -11,17 +11,20 @@ import SlotEditModal from "./SlotEditModal";
  *    "DataBase Management Systems" → "DBMS".
  *  - Lab classes → acronym + " Lab", e.g. "DataBase Management Systems Lab" → "DBMS Lab". */
 function shortenLabel(label: string): string {
-  const trimmed = label.trim();
+  const originalTrimmed = label.trim();
 
   // Already a short code (e.g. "DBMS", "SE", "Class")
-  if (trimmed.length <= 5) return trimmed;
+  if (originalTrimmed.length <= 5) return originalTrimmed;
   // Already an all-uppercase code like "OOPJ"
-  if (/^[A-Z]{2,5}$/.test(trimmed)) return trimmed;
+  if (/^[A-Z]{2,5}$/.test(originalTrimmed)) return originalTrimmed;
+
+  // Normalize "DataBase" to "Data Base" so it produces "DBMS" instead of "DMS"
+  const trimmed = originalTrimmed.replace(/DataBase/ig, "Data Base");
 
   const words = trimmed.split(/\s+/);
 
   // Single long word — just return it (e.g. a user-typed name)
-  if (words.length === 1) return trimmed;
+  if (words.length === 1) return originalTrimmed;
 
   // Check if it ends with "Lab" — separate it out
   const isLab = words[words.length - 1].toLowerCase() === "lab";

@@ -23,11 +23,11 @@ const DEFAULT_TIME_SLOTS = [
 // Day detection patterns
 const DAY_PATTERNS: { day: Weekday; regex: RegExp }[] = [
   { day: "Monday", regex: /(?:\b(?:MON(?:DAY)?|WON|WO)\b)/i },
-  { day: "Tuesday", regex: /(?:\b(?:TUE(?:S(?:DAY)?)?|VEY|VE)\b)/i },
+  { day: "Tuesday", regex: /(?:\b(?:TUE(?:S(?:DAY)?)?|VEY|VE|TL)\b|^\s*Tl\b)/i },
   { day: "Wednesday", regex: /(?:\b(?:WED(?:NES(?:DAY)?)?|VED|VEN|MO)\b|™)/i },
   { day: "Thursday", regex: /(?:\b(?:THU(?:RS(?:DAY)?)?|TH|LJ)\b|^-)/i },
-  { day: "Friday", regex: /(?:\b(?:FRI(?:DAY)?|FR|AR)\b)/i },
-  { day: "Saturday", regex: /(?:\b(?:SAT(?:URDAY)?|S4T|5AT|SATUR)\b)/i },
+  { day: "Friday", regex: /(?:\b(?:FRI(?:DAY)?|FR|AR|FI)\b)/i },
+  { day: "Saturday", regex: /(?:\b(?:SAT(?:URDAY)?|S4T|5AT|SATUR)\b|^\s*S\b)/i },
 ];
 
 // Classes to automatically ignore (removed from parsed timetable)
@@ -35,6 +35,7 @@ export const IGNORED_CLASSES = new Set([
   "library",
   "nptel",
   "sports",
+  "npte",
 ]);
 
 // Words that are NOT subject codes (lab name components, common noise)
@@ -45,9 +46,11 @@ const NOISE_WORDS = new Set([
   "computational", "mathematics", "database", "object",
   "software", "java", "data", "base",
   // Ignored class names (also noise for subject code detection)
-  "library", "nptel", "sports",
-  // Common OCR artifacts
-  "eno", "ww", "ow", "lt", "ty",
+  "library", "nptel", "sports", "npte",
+  // Common OCR artifacts and time words
+  "eno", "ww", "ow", "lt", "ty", "to", "uu", "iu",
+  // Header noise words
+  "from", "room", "roun", "classwork", "cclasshork", "commence", "doy", "day", "iao", "time", "table",
 ]);
 
 // Words that are part of lab names (used to build the lab regex)
@@ -98,7 +101,7 @@ function isSubjectCode(word: string): boolean {
 function extractLabs(text: string): { labs: { label: string, index: number }[]; cleaned: string } {
   // Match lab patterns: one or more title-case/lowercase words followed by "Lab"
   // The words before "Lab" must be descriptive (not 2-4 char uppercase subject codes).
-  const labRegex = /(?:(?:(?![A-Z]+\b)[A-Za-z]{3,})\s+)+L[.\s]*a[.\s]*b(?:[\s-]*\d*)?/g;
+  const labRegex = /(?:(?:(?![A-Z]+\b)[A-Za-z]{3,})\s+)+L[.\s]*a[.\s]*b/g;
 
   const labs: { label: string, index: number }[] = [];
   let match;
@@ -198,6 +201,81 @@ function isIgnoredClass(label: string): boolean {
   // Check individual words (e.g. lab names containing "Library")
   const words = lower.split(/\s+/);
   return words.some((w) => IGNORED_CLASSES.has(w));
+}
+
+/**
+ * Parse structured JSON output from the Python OCR script into a Timetable structure.
+ * This is much more robust because it respects the physical table layout.
+ */
+export function parseStructuredOcr(data: string[][]): Timetable {
+  const timetable: Timetable = {
+    Monday: [],
+    Tuesday: [],
+    Wednesday: [],
+    Thursday: [],
+    Friday: [],
+    Saturday: [],
+  };
+
+  const dayOrder: Weekday[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  let expectedDayIndex = 0;
+
+  for (const row of data) {
+    if (!row || row.length === 0) continue;
+    
+    // Join the row to a single string to use the existing extraction logic
+    const rowStr = row.join(" ");
+
+    // Skip time header rows to avoid parsing time artifacts as subjects
+    if (/[0-9]{1,2}[:-][0-9]{2}/.test(rowStr) && (/\bto\b/i.test(rowStr) || /-/i.test(rowStr))) {
+        continue;
+    }
+    
+    // First, try to detect the day explicitly
+    let detectedDay = detectDay(rowStr);
+    let dayToAssign: Weekday | null = null;
+    
+    // Extract slots (subject codes and labs) from the row
+    // We clean the row first if a day pattern is matched
+    let cleanRowStr = rowStr;
+    if (detectedDay) {
+      const pattern = DAY_PATTERNS.find((p) => p.day === detectedDay)!;
+      cleanRowStr = rowStr.replace(pattern.regex, "").trim();
+    }
+    
+    const slotLabels = extractSlots(cleanRowStr);
+    
+    if (detectedDay) {
+      dayToAssign = detectedDay;
+      expectedDayIndex = dayOrder.indexOf(detectedDay) + 1;
+    } else if (slotLabels.length >= 2 && expectedDayIndex < dayOrder.length) {
+      // If we didn't explicitly detect a day, but the row contains multiple classes,
+      // it's almost certainly the next day in the sequence (e.g., TUE was missed by OCR).
+      dayToAssign = dayOrder[expectedDayIndex];
+      expectedDayIndex++;
+    }
+    
+    if (dayToAssign && slotLabels.length > 0) {
+      let slotIndex = 0;
+      for (let i = 0; i < slotLabels.length && slotIndex < DEFAULT_TIME_SLOTS.length; i++) {
+        const label = slotLabels[i];
+
+        if (isIgnoredClass(label)) continue;
+        
+        const timeSlot = DEFAULT_TIME_SLOTS[slotIndex];
+        timetable[dayToAssign].push({
+          id: generateSlotId(),
+          label,
+          startTime: timeSlot.start,
+          endTime: timeSlot.end,
+        });
+        
+        slotIndex++;
+      }
+    }
+  }
+
+  return timetable;
 }
 
 /**

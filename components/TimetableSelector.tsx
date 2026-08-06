@@ -24,11 +24,11 @@ const getAvailableSections = (year: string, branch: string): string[] => {
 
 export default function TimetableSelector() {
   const { setTimetable } = useAttendify();
-  
+
   const [year, setYear] = useState<string>("1st");
   const [branch, setBranch] = useState<string>("CSE");
   const [section, setSection] = useState<string>("A");
-  
+
   const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -159,7 +159,7 @@ export default function TimetableSelector() {
           {error}
         </div>
       )}
-      
+
       {successMsg && (
         <div className="mt-4 rounded-md border-[3px] border-card-green bg-card-green/10 px-4 py-2 font-mono text-sm font-medium text-card-green">
           {successMsg}
