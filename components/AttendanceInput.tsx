@@ -12,6 +12,13 @@ export default function AttendanceInput() {
   const [total, setTotal] = useState("");
 
   const [prevLoaded, setPrevLoaded] = useState(false);
+  const [showSaved, setShowSaved] = useState(false);
+
+  const parsedAttended = parseInt(attended, 10);
+  const parsedTotal = parseInt(total, 10);
+  const hasUnsavedChanges = 
+    (!isNaN(parsedAttended) && parsedAttended !== attendance.attendedCount) ||
+    (!isNaN(parsedTotal) && parsedTotal !== attendance.totalCount);
 
   // Sync local inputs once context hydrates from localStorage
   if (state.isLoaded && !prevLoaded) {
@@ -32,10 +39,16 @@ export default function AttendanceInput() {
   }, [attended, total]);
 
   const handleApply = useCallback(() => {
-    const a = parseInt(attended, 10);
+    let a = parseInt(attended, 10);
     const t = parseInt(total, 10);
     if (!isNaN(a) && !isNaN(t) && t > 0 && a >= 0) {
+      if (a > t) {
+        a = t;
+        setAttended(String(t));
+      }
       setAttendanceRatio(a, t);
+      setShowSaved(true);
+      setTimeout(() => setShowSaved(false), 2000);
     }
   }, [attended, total, setAttendanceRatio]);
 
@@ -82,6 +95,13 @@ export default function AttendanceInput() {
               min={1}
               value={total}
               onChange={(e) => setTotal(e.target.value)}
+              onBlur={() => {
+                const a = parseInt(attended, 10);
+                const t = parseInt(total, 10);
+                if (!isNaN(a) && !isNaN(t) && a > t) {
+                  setAttended(total);
+                }
+              }}
               placeholder="60"
               className="w-full rounded-md border-[3px] border-brutal-black px-3 py-2.5 font-mono text-lg font-bold
                            focus:outline-none focus:ring-2 focus:ring-accent-yellow focus:border-accent-yellow
@@ -98,18 +118,29 @@ export default function AttendanceInput() {
               {livePercentage !== null ? `${livePercentage.toFixed(1)}%` : "—"}
             </p>
           </div>
-          <button
-            onClick={handleApply}
-            disabled={livePercentage === null}
-            className="rounded-md border-[3px] border-brutal-black bg-accent-yellow px-6 py-2.5
-                       font-mono text-sm font-bold text-brutal-black shadow-brutal
-                       hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]
-                       active:shadow-brutal-active
-                       disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-brutal disabled:hover:translate-x-0 disabled:hover:translate-y-0
-                       transition-all"
-          >
-            Save
-          </button>
+          <div className="flex items-center gap-3">
+            {showSaved ? (
+              <span className="font-mono text-xs font-bold text-card-green bg-card-green/10 px-2 py-1 rounded-md border-[2px] border-card-green">
+                Saved!
+              </span>
+            ) : hasUnsavedChanges ? (
+              <span className="font-mono text-xs font-bold text-orange-500 bg-orange-100 px-2 py-1 rounded-md border-[2px] border-orange-500">
+                Unsaved changes
+              </span>
+            ) : null}
+            <button
+              onClick={handleApply}
+              disabled={livePercentage === null}
+              className="rounded-md border-[3px] border-brutal-black bg-accent-yellow px-6 py-2.5
+                         font-mono text-sm font-bold text-brutal-black shadow-brutal
+                         hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]
+                         active:shadow-brutal-active
+                         disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-brutal disabled:hover:translate-x-0 disabled:hover:translate-y-0
+                         transition-all"
+            >
+              Save
+            </button>
+          </div>
         </div>
       </div>
     </section>

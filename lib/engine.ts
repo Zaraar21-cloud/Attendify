@@ -27,11 +27,12 @@ export function classesNeededForTarget(
   total: number,
   targetPercent: number
 ): number {
-  if (targetPercent >= 100) return Infinity;
   if (total <= 0) return 0;
 
   const currentPercent = calcPercentage(attended, total);
   if (currentPercent >= targetPercent) return 0;
+
+  if (targetPercent >= 100) return -1; // mathematically impossible
 
   const target = targetPercent / 100;
   const needed = Math.ceil((target * total - attended) / (1 - target));
@@ -95,8 +96,9 @@ export function daysNeededForTarget(
   classesNeeded: number,
   timetable: Timetable
 ): number {
+  if (classesNeeded < 0) return -1;
   const avg = avgClassesPerDay(timetable);
-  if (avg <= 0 || classesNeeded <= 0) return 0;
+  if (avg <= 0 || classesNeeded === 0) return 0;
   return Math.ceil(classesNeeded / avg);
 }
 

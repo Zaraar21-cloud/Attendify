@@ -540,8 +540,264 @@ export default function WhatIfSimulator() {
           )}
         </div>
 
-        {/* Weekly Classes Section */}
+        {/* ─── Month Simulator Section ─────────────────────────────────────── */}
         <div className="mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h3 className="font-heading text-base font-extrabold text-brutal-black flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md border-[2px] border-brutal-black bg-accent-blue text-white text-[10px] font-mono font-bold shadow-brutal-sm">
+                🗓️
+              </span>
+              Monthly Classes
+              <span className="ml-auto sm:ml-2 rounded-md border-[2px] border-brutal-black bg-cream px-2 py-0.5 font-mono text-[10px] font-bold text-brutal-black/60">
+                {todayDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </span>
+            </h3>
+
+            <div className="flex gap-2 self-start sm:self-auto">
+              {hasMonthSelection && (
+                <button
+                  onClick={() => setMonthModes({})}
+                  className="rounded-md border-[2px] border-brutal-black bg-cream px-3 py-1.5
+                             font-mono text-xs font-bold text-brutal-black/60 hover:bg-brutal-black hover:text-white transition-colors"
+                >
+                  ✕ Clear
+                </button>
+              )}
+              {!allSelectableDaysSelected && (
+                <button
+                  onClick={selectAllSelectableDays}
+                  className="rounded-md border-[2px] border-brutal-black bg-card-green/10 px-3 py-1.5
+                             font-mono text-xs font-bold text-card-green hover:bg-card-green hover:text-white transition-colors"
+                >
+                  ✓ Select All to Attend
+                </button>
+              )}
+            </div>
+          </div>
+
+          <p className="font-mono text-xs text-brutal-black/50 mb-3">
+            Simulate attending or skipping upcoming days this month.
+          </p>
+
+          <div className="max-w-[280px] sm:max-w-[320px] mx-auto mt-2 mb-6 touch-none">
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-2">
+              {/* Weekday Headers */}
+              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
+                <div key={d} className="text-center font-mono text-[10px] font-bold text-brutal-black/50">
+                  {d}
+                </div>
+              ))}
+
+              {/* Empty slots for start of month */}
+              {Array.from({ length: new Date(currentYear, currentMonth, 1).getDay() }).map((_, i) => (
+                <div key={`empty-${i}`} />
+              ))}
+
+              {/* Days */}
+              {monthDays.map((dayNum) => {
+                const disabled = isDayDisabled(dayNum);
+                const mode = monthModes[dayNum] ?? "neutral";
+                const isRequired = requiredDaysToHighlight.has(dayNum);
+
+                let bgClass: string;
+                if (mode === "skip") {
+                  bgClass = "bg-card-coral text-white shadow-brutal-sm";
+                } else if (mode === "attend") {
+                  bgClass = "bg-card-green text-white shadow-brutal-sm";
+                } else if (isRequired) {
+                  bgClass = "bg-orange-200 text-brutal-black hover:border-orange-400 hover:shadow-brutal-sm";
+                } else {
+                  bgClass = disabled
+                    ? "bg-cream/50 text-brutal-black/20 cursor-not-allowed"
+                    : "bg-white text-brutal-black hover:bg-card-lavender/10";
+                }
+
+                return (
+                  <button
+                    key={dayNum}
+                    onPointerDown={() => handleDayMouseDown(dayNum)}
+                    onPointerEnter={() => handleDayMouseEnter(dayNum)}
+                    data-month-day={dayNum}
+                    disabled={disabled}
+                    className={`relative aspect-square rounded-md border-[2px] border-brutal-black flex flex-col items-center justify-center font-mono transition-all select-none
+                    ${bgClass}`}
+                  >
+                    <span className="text-sm font-extrabold">{dayNum}</span>
+                    {!disabled && mode !== "neutral" && (
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border-[1px] border-brutal-black bg-white">
+                        {mode === "skip" ? (
+                          <span className="text-[6px] text-card-coral">🚫</span>
+                        ) : (
+                          <span className="text-[6px] text-card-green">✓</span>
+                        )}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Legend */}
+          {requiredDaysToHighlight.size > 0 && (
+            <div className="flex items-center gap-2 mb-4 max-w-[280px] sm:max-w-[320px] mx-auto">
+              <span className="block h-3 w-3 rounded-sm bg-orange-200 border border-brutal-black"></span>
+              <span className="font-mono text-[10px] font-bold text-brutal-black/70">
+                Required to attend to secure target
+              </span>
+            </div>
+          )}
+
+          {/* Month-level selection summary */}
+          {hasMonthSelection && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {Object.entries(monthModes).map(([dayStr, mode]) => {
+                const dayNum = parseInt(dayStr, 10);
+                if (mode === "neutral") return null;
+                return (
+                  <span
+                    key={dayStr}
+                    className={`inline-flex items-center gap-1 rounded-md border-[2px] px-2 py-0.5 font-mono text-[10px] font-bold ${mode === "skip"
+                      ? "border-card-coral bg-card-coral/10 text-card-coral"
+                      : "border-card-green bg-card-green/10 text-card-green"
+                      }`}
+                  >
+                    {mode === "skip" ? "🚫" : "✓"} {dayNum} {new Date(currentYear, currentMonth, dayNum).toLocaleString('default', { month: 'short' })}
+                    <button
+                      onClick={() =>
+                        setMonthModes((prev) => {
+                          const next = { ...prev };
+                          delete next[dayNum];
+                          return next;
+                        })
+                      }
+                      className="ml-0.5 hover:text-brutal-black transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Month-level Simulation Results */}
+          {hasData && monthSimulation ? (
+            <div className="rounded-lg border-[3px] border-brutal-black bg-cream p-4 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    New %
+                  </p>
+                  <p
+                    className={`font-heading text-2xl font-extrabold ${monthSimulation.newPercentage >= attendance.targetPercentage
+                      ? "text-card-green"
+                      : "text-card-coral"
+                      }`}
+                  >
+                    {monthSimulation.newPercentage.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Change
+                  </p>
+                  <p
+                    className={`font-heading text-2xl font-extrabold ${monthSimulation.delta >= 0 ? "text-card-green" : "text-card-coral"
+                      }`}
+                  >
+                    {monthSimulation.delta >= 0 ? "+" : ""}
+                    {monthSimulation.delta.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Extra Classes
+                  </p>
+                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
+                    {monthSimulation.extraClassesNeeded}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Extra Days
+                  </p>
+                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
+                    {monthSimulation.extraDaysNeeded}
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className={`rounded-md border-[3px] border-brutal-black px-4 py-3 font-mono text-sm font-medium ${monthSimulation.newPercentage >= attendance.targetPercentage
+                  ? "bg-card-green/10 text-card-green"
+                  : "bg-card-coral/10 text-card-coral"
+                  }`}
+              >
+                {monthSimulation.message}
+              </div>
+            </div>
+          ) : hasData && !hasMonthSelection && requiredDaysSimulation ? (
+            <div className="rounded-lg border-[3px] border-brutal-black bg-orange-50 p-4 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Expected %
+                  </p>
+                  <p
+                    className={`font-heading text-2xl font-extrabold ${requiredDaysSimulation.newPercentage >= attendance.targetPercentage
+                      ? "text-orange-500"
+                      : "text-card-coral"
+                      }`}
+                  >
+                    {requiredDaysSimulation.newPercentage.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Change
+                  </p>
+                  <p
+                    className={`font-heading text-2xl font-extrabold ${requiredDaysSimulation.delta >= 0 ? "text-orange-500" : "text-card-coral"
+                      }`}
+                  >
+                    {requiredDaysSimulation.delta >= 0 ? "+" : ""}
+                    {requiredDaysSimulation.delta.toFixed(1)}%
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Classes
+                  </p>
+                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
+                    +{requiredDaysSimulation.attendedClasses}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
+                    Days
+                  </p>
+                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
+                    +{requiredDaysToHighlight.size}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-md border-[3px] border-brutal-black px-4 py-3 font-mono text-sm font-medium bg-orange-100 text-orange-700">
+                <span className="font-bold">Required Days Impact:</span> {requiredDaysSimulation.message}
+              </div>
+            </div>
+          ) : hasData && !hasMonthSelection ? (
+            <div className="rounded-md border-[2px] border-dashed border-brutal-black/20 py-4 text-center mb-4">
+              <p className="font-mono text-xs text-brutal-black/40">
+                Select days in the month calendar to see the impact
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        {/* ─── Weekly Classes Section ─────────────────────────────────────── */}
+        <div className="mt-6 pt-5 border-t-[3px] border-brutal-black/10">
           <h3 className="font-heading text-base font-extrabold text-brutal-black flex items-center gap-2 mb-3">
             <span className="flex h-6 w-6 items-center justify-center rounded-md border-[2px] border-brutal-black bg-accent-pink text-white text-[10px] font-mono font-bold shadow-brutal-sm">
               🗓️
@@ -916,262 +1172,6 @@ export default function WhatIfSimulator() {
             ) : null}
           </div>
         )}
-
-        {/* ─── Month Simulator Section ─────────────────────────────────────── */}
-        <div className="mt-6 pt-5 border-t-[3px] border-brutal-black/10">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <h3 className="font-heading text-base font-extrabold text-brutal-black flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md border-[2px] border-brutal-black bg-accent-blue text-white text-[10px] font-mono font-bold shadow-brutal-sm">
-                🗓️
-              </span>
-              Monthly Classes
-              <span className="ml-auto sm:ml-2 rounded-md border-[2px] border-brutal-black bg-cream px-2 py-0.5 font-mono text-[10px] font-bold text-brutal-black/60">
-                {todayDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-              </span>
-            </h3>
-
-            <div className="flex gap-2 self-start sm:self-auto">
-              {hasMonthSelection && (
-                <button
-                  onClick={() => setMonthModes({})}
-                  className="rounded-md border-[2px] border-brutal-black bg-cream px-3 py-1.5
-                             font-mono text-xs font-bold text-brutal-black/60 hover:bg-brutal-black hover:text-white transition-colors"
-                >
-                  ✕ Clear
-                </button>
-              )}
-              {!allSelectableDaysSelected && (
-                <button
-                  onClick={selectAllSelectableDays}
-                  className="rounded-md border-[2px] border-brutal-black bg-card-green/10 px-3 py-1.5
-                             font-mono text-xs font-bold text-card-green hover:bg-card-green hover:text-white transition-colors"
-                >
-                  ✓ Select All to Attend
-                </button>
-              )}
-            </div>
-          </div>
-
-          <p className="font-mono text-xs text-brutal-black/50 mb-3">
-            Simulate attending or skipping upcoming days this month.
-          </p>
-
-          <div className="max-w-[280px] sm:max-w-[320px] mx-auto mt-2 mb-6 touch-none">
-            <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-2">
-              {/* Weekday Headers */}
-              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((d) => (
-                <div key={d} className="text-center font-mono text-[10px] font-bold text-brutal-black/50">
-                  {d}
-                </div>
-              ))}
-
-              {/* Empty slots for start of month */}
-              {Array.from({ length: new Date(currentYear, currentMonth, 1).getDay() }).map((_, i) => (
-                <div key={`empty-${i}`} />
-              ))}
-
-              {/* Days */}
-              {monthDays.map((dayNum) => {
-                const disabled = isDayDisabled(dayNum);
-                const mode = monthModes[dayNum] ?? "neutral";
-                const isRequired = requiredDaysToHighlight.has(dayNum);
-
-                let bgClass: string;
-                if (mode === "skip") {
-                  bgClass = "bg-card-coral text-white shadow-brutal-sm";
-                } else if (mode === "attend") {
-                  bgClass = "bg-card-green text-white shadow-brutal-sm";
-                } else if (isRequired) {
-                  bgClass = "bg-orange-200 text-brutal-black hover:border-orange-400 hover:shadow-brutal-sm";
-                } else {
-                  bgClass = disabled
-                    ? "bg-cream/50 text-brutal-black/20 cursor-not-allowed"
-                    : "bg-white text-brutal-black hover:bg-card-lavender/10";
-                }
-
-                return (
-                  <button
-                    key={dayNum}
-                    onPointerDown={() => handleDayMouseDown(dayNum)}
-                    onPointerEnter={() => handleDayMouseEnter(dayNum)}
-                    data-month-day={dayNum}
-                    disabled={disabled}
-                    className={`relative aspect-square rounded-md border-[2px] border-brutal-black flex flex-col items-center justify-center font-mono transition-all select-none
-                    ${bgClass}`}
-                  >
-                    <span className="text-sm font-extrabold">{dayNum}</span>
-                    {!disabled && mode !== "neutral" && (
-                      <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full border-[1px] border-brutal-black bg-white">
-                        {mode === "skip" ? (
-                          <span className="text-[6px] text-card-coral">🚫</span>
-                        ) : (
-                          <span className="text-[6px] text-card-green">✓</span>
-                        )}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Legend */}
-          {requiredDaysToHighlight.size > 0 && (
-            <div className="flex items-center gap-2 mb-4 max-w-[280px] sm:max-w-[320px] mx-auto">
-              <span className="block h-3 w-3 rounded-sm bg-orange-200 border border-brutal-black"></span>
-              <span className="font-mono text-[10px] font-bold text-brutal-black/70">
-                Required to attend to secure target
-              </span>
-            </div>
-          )}
-
-          {/* Month-level selection summary */}
-          {hasMonthSelection && (
-            <div className="flex flex-wrap gap-2 mb-4">
-              {Object.entries(monthModes).map(([dayStr, mode]) => {
-                const dayNum = parseInt(dayStr, 10);
-                if (mode === "neutral") return null;
-                return (
-                  <span
-                    key={dayStr}
-                    className={`inline-flex items-center gap-1 rounded-md border-[2px] px-2 py-0.5 font-mono text-[10px] font-bold ${mode === "skip"
-                      ? "border-card-coral bg-card-coral/10 text-card-coral"
-                      : "border-card-green bg-card-green/10 text-card-green"
-                      }`}
-                  >
-                    {mode === "skip" ? "🚫" : "✓"} {dayNum} {new Date(currentYear, currentMonth, dayNum).toLocaleString('default', { month: 'short' })}
-                    <button
-                      onClick={() =>
-                        setMonthModes((prev) => {
-                          const next = { ...prev };
-                          delete next[dayNum];
-                          return next;
-                        })
-                      }
-                      className="ml-0.5 hover:text-brutal-black transition-colors"
-                    >
-                      ✕
-                    </button>
-                  </span>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Month-level Simulation Results */}
-          {hasData && monthSimulation ? (
-            <div className="rounded-lg border-[3px] border-brutal-black bg-cream p-4 mb-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                <div className="text-center">
-                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
-                    New %
-                  </p>
-                  <p
-                    className={`font-heading text-2xl font-extrabold ${monthSimulation.newPercentage >= attendance.targetPercentage
-                      ? "text-card-green"
-                      : "text-card-coral"
-                      }`}
-                  >
-                    {monthSimulation.newPercentage.toFixed(1)}%
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
-                    Change
-                  </p>
-                  <p
-                    className={`font-heading text-2xl font-extrabold ${monthSimulation.delta >= 0 ? "text-card-green" : "text-card-coral"
-                      }`}
-                  >
-                    {monthSimulation.delta >= 0 ? "+" : ""}
-                    {monthSimulation.delta.toFixed(1)}%
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
-                    Extra Classes
-                  </p>
-                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
-                    {monthSimulation.extraClassesNeeded}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
-                    Extra Days
-                  </p>
-                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
-                    {monthSimulation.extraDaysNeeded}
-                  </p>
-                </div>
-              </div>
-
-              <div
-                className={`rounded-md border-[3px] border-brutal-black px-4 py-3 font-mono text-sm font-medium ${monthSimulation.newPercentage >= attendance.targetPercentage
-                  ? "bg-card-green/10 text-card-green"
-                  : "bg-card-coral/10 text-card-coral"
-                  }`}
-              >
-                {monthSimulation.message}
-              </div>
-            </div>
-          ) : hasData && !hasMonthSelection && requiredDaysSimulation ? (
-            <div className="rounded-lg border-[3px] border-brutal-black bg-orange-50 p-4 mb-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                <div className="text-center">
-                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
-                    Expected %
-                  </p>
-                  <p
-                    className={`font-heading text-2xl font-extrabold ${requiredDaysSimulation.newPercentage >= attendance.targetPercentage
-                      ? "text-orange-500"
-                      : "text-card-coral"
-                      }`}
-                  >
-                    {requiredDaysSimulation.newPercentage.toFixed(1)}%
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
-                    Change
-                  </p>
-                  <p
-                    className={`font-heading text-2xl font-extrabold ${requiredDaysSimulation.delta >= 0 ? "text-orange-500" : "text-card-coral"
-                      }`}
-                  >
-                    {requiredDaysSimulation.delta >= 0 ? "+" : ""}
-                    {requiredDaysSimulation.delta.toFixed(1)}%
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
-                    Classes
-                  </p>
-                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
-                    +{requiredDaysSimulation.attendedClasses}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="font-mono text-[10px] font-bold text-brutal-black/50 uppercase">
-                    Days
-                  </p>
-                  <p className="font-heading text-2xl font-extrabold text-brutal-black">
-                    +{requiredDaysToHighlight.size}
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-md border-[3px] border-brutal-black px-4 py-3 font-mono text-sm font-medium bg-orange-100 text-orange-700">
-                <span className="font-bold">Required Days Impact:</span> {requiredDaysSimulation.message}
-              </div>
-            </div>
-          ) : hasData && !hasMonthSelection ? (
-            <div className="rounded-md border-[2px] border-dashed border-brutal-black/20 py-4 text-center mb-4">
-              <p className="font-mono text-xs text-brutal-black/40">
-                Select days in the month calendar to see the impact
-              </p>
-            </div>
-          ) : null}
-        </div>
 
         {/* No classes today message */}
         {todayName && todaySlots.length === 0 && (

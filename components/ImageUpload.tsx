@@ -52,6 +52,7 @@ export default function ImageUpload({
   const [branch, setBranch] = useState<string>("CSE");
   const [section, setSection] = useState<string>("A");
   const [isFetching, setIsFetching] = useState(false);
+  const [showCollegeNotice, setShowCollegeNotice] = useState(false);
 
   const availableSections = useMemo(() => getAvailableSections(year, branch), [year, branch]);
 
@@ -171,7 +172,7 @@ export default function ImageUpload({
           },
         });
         await worker.setParameters({
-          tessedit_pageseg_mode: PSM.SINGLE_COLUMN, // "Assume a single column of text of variable sizes" - Great for tables
+          tessedit_pageseg_mode: PSM.AUTO, // Fully automatic page segmentation (better for grids)
         });
         const {
           data: { text },
@@ -235,11 +236,38 @@ export default function ImageUpload({
         <span className="flex h-8 w-8 items-center justify-center rounded-md border-[3px] border-brutal-black bg-card-blue text-white text-sm font-mono shadow-brutal-sm">
           1
         </span>
-        Upload Timetable
+        Load Timetable
       </h2>
 
       {/* Fetch Section */}
       <div className="mb-6 rounded-lg border-[3px] border-brutal-black bg-cream p-5 shadow-brutal">
+        <div className="mb-4">
+          <p className="font-mono text-sm font-bold text-brutal-black mb-3">
+            College:
+          </p>
+          <div 
+            onClick={() => setShowCollegeNotice(true)} 
+            className="cursor-pointer relative"
+          >
+            <select
+              disabled
+              className="w-full rounded-md border-[2px] border-brutal-black px-3 py-2 pr-8 font-mono text-sm shadow-sm opacity-50 cursor-not-allowed appearance-none bg-white pointer-events-none"
+            >
+              <option>Sreenidhi Institute of Science & Technology</option>
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-brutal-black opacity-50">
+              <svg className="h-4 w-4 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+              </svg>
+            </div>
+          </div>
+          {showCollegeNotice && (
+            <p className="text-xs text-brutal-black/70 mt-2 font-mono font-bold">
+              We're working on adding more colleges later.
+            </p>
+          )}
+        </div>
+        
         <p className="font-mono text-sm font-bold text-brutal-black mb-3">
           Fetch existing timetable:
         </p>
@@ -289,6 +317,18 @@ export default function ImageUpload({
           {isFetching ? "Fetching..." : "Fetch Timetable"}
         </button>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-md border-[3px] border-card-coral bg-card-coral/10 px-4 py-2 font-mono text-sm font-medium text-card-coral">
+          {error}
+        </div>
+      )}
+      
+      {successMsg && (
+        <div className="mb-6 rounded-md border-[3px] border-card-green bg-card-green/10 px-4 py-2 font-mono text-sm font-medium text-card-green">
+          {successMsg}
+        </div>
+      )}
 
       <div className="flex items-center gap-4 mb-6">
         <div className="h-[2px] flex-1 bg-brutal-black/10"></div>
@@ -387,17 +427,6 @@ export default function ImageUpload({
         </div>
       )}
 
-      {error && (
-        <div className="mt-4 rounded-md border-[3px] border-card-coral bg-card-coral/10 px-4 py-2 font-mono text-sm font-medium text-card-coral">
-          {error}
-        </div>
-      )}
-      
-      {successMsg && (
-        <div className="mt-4 rounded-md border-[3px] border-card-green bg-card-green/10 px-4 py-2 font-mono text-sm font-medium text-card-green">
-          {successMsg}
-        </div>
-      )}
     </section>
   );
 }

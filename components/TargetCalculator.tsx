@@ -39,14 +39,19 @@ export default function TargetCalculator() {
   const handleCustomTarget = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const valStr = e.target.value;
-      setInputValue(valStr);
 
       if (valStr === "") {
+        setInputValue("");
         setTarget(65);
       } else {
-        const val = parseFloat(valStr);
-        if (!isNaN(val) && val >= 0 && val <= 100) {
+        let val = parseFloat(valStr);
+        if (!isNaN(val)) {
+          if (val > 100) val = 100;
+          if (val < 1) val = 1;
+          setInputValue(val.toString());
           setTarget(val);
+        } else {
+          setInputValue(valStr);
         }
       }
     },
@@ -121,18 +126,20 @@ export default function TargetCalculator() {
               }`}
             >
               <p className="font-mono text-xs font-bold text-brutal-black/60 mb-1">
-                {result.isAboveTarget ? "You're Safe ✓" : "Classes Needed"}
+                {result.isAboveTarget ? "You're Safe ✓" : result.requiredClasses === -1 ? "Impossible" : "Classes Needed"}
               </p>
               <p
                 className={`font-heading text-4xl font-extrabold ${
                   result.isAboveTarget ? "text-card-green" : "text-card-coral"
                 }`}
               >
-                {result.isAboveTarget ? "0" : result.requiredClasses}
+                {result.isAboveTarget ? "0" : result.requiredClasses === -1 ? "N/A" : result.requiredClasses}
               </p>
               <p className="font-mono text-xs text-brutal-black/50 mt-1">
                 {result.isAboveTarget
                   ? "Above target percentage"
+                  : result.requiredClasses === -1
+                  ? "Cannot reach 100% with misses"
                   : `consecutive classes to attend`}
               </p>
             </div>
@@ -143,11 +150,13 @@ export default function TargetCalculator() {
                 Calendar Days
               </p>
               <p className="font-heading text-4xl font-extrabold text-card-blue">
-                {result.isAboveTarget ? "0" : result.requiredDays}
+                {result.isAboveTarget ? "0" : result.requiredDays === -1 ? "N/A" : result.requiredDays}
               </p>
               <p className="font-mono text-xs text-brutal-black/50 mt-1">
                 {result.isAboveTarget
                   ? "No recovery needed"
+                  : result.requiredDays === -1
+                  ? "Unreachable goal"
                   : "days of full attendance"}
               </p>
             </div>

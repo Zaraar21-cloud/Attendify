@@ -22,12 +22,12 @@ const DEFAULT_TIME_SLOTS = [
 
 // Day detection patterns
 const DAY_PATTERNS: { day: Weekday; regex: RegExp }[] = [
-  { day: "Monday", regex: /\bMON(?:DAY)?\b/i },
-  { day: "Tuesday", regex: /\bTUE(?:S(?:DAY)?)?\b/i },
-  { day: "Wednesday", regex: /\b(?:WED(?:NES(?:DAY)?)?|VED|VEN)\b/i },
-  { day: "Thursday", regex: /\b(?:THU(?:RS(?:DAY)?)?|TH)\b/i },
-  { day: "Friday", regex: /\b(?:FRI(?:DAY)?|FR)\b/i },
-  { day: "Saturday", regex: /\bSAT(?:URDAY)?\b/i },
+  { day: "Monday", regex: /(?:\b(?:MON(?:DAY)?|WON|WO)\b)/i },
+  { day: "Tuesday", regex: /(?:\b(?:TUE(?:S(?:DAY)?)?|VEY|VE)\b)/i },
+  { day: "Wednesday", regex: /(?:\b(?:WED(?:NES(?:DAY)?)?|VED|VEN|MO)\b|™)/i },
+  { day: "Thursday", regex: /(?:\b(?:THU(?:RS(?:DAY)?)?|TH|LJ)\b|^-)/i },
+  { day: "Friday", regex: /(?:\b(?:FRI(?:DAY)?|FR|AR)\b)/i },
+  { day: "Saturday", regex: /(?:\b(?:SAT(?:URDAY)?|S4T|5AT|SATUR)\b)/i },
 ];
 
 // Classes to automatically ignore (removed from parsed timetable)
@@ -98,7 +98,7 @@ function isSubjectCode(word: string): boolean {
 function extractLabs(text: string): { labs: { label: string, index: number }[]; cleaned: string } {
   // Match lab patterns: one or more title-case/lowercase words followed by "Lab"
   // The words before "Lab" must be descriptive (not 2-4 char uppercase subject codes).
-  const labRegex = /(?:(?:(?![A-Z]+\b)[A-Za-z]{3,})\s+)+Lab(?:[\s-]*\d*)?/g;
+  const labRegex = /(?:(?:(?![A-Z]+\b)[A-Za-z]{3,})\s+)+L[.\s]*a[.\s]*b(?:[\s-]*\d*)?/g;
 
   const labs: { label: string, index: number }[] = [];
   let match;
@@ -303,7 +303,35 @@ export function parseOcrText(rawText: string): Timetable {
     dayGroups["Wednesday"] = wedLines;
   }
 
-  // Step 4: For each day, extract slots and create timetable entries
+  // Step 4: Fix Friday / Saturday split
+  // OCR might merge Saturday into Friday's line.
+  if (dayGroups["Friday"] && !dayGroups["Saturday"]) {
+    const friLines = dayGroups["Friday"]!;
+    const newFriLines: string[] = [];
+    const satLines: string[] = [];
+    const satRegex = /(?:\b(?:SAT(?:URDAY)?|S4T|5AT|SATUR)\b)/i;
+
+    for (const line of friLines) {
+      const match = satRegex.exec(line);
+      // If we find a Saturday keyword in the middle of a Friday line
+      if (match && match.index > 0) {
+        const before = line.substring(0, match.index).trim();
+        const after = line.substring(match.index + match[0].length).trim();
+        if (before) newFriLines.push(before);
+        if (after) satLines.push(after);
+        else satLines.push(line);
+      } else {
+        newFriLines.push(line);
+      }
+    }
+    
+    if (satLines.length > 0) {
+      dayGroups["Friday"] = newFriLines;
+      dayGroups["Saturday"] = satLines;
+    }
+  }
+
+  // Step 5: For each day, extract slots and create timetable entries
   for (const day of WEEKDAYS) {
     const dayLines = dayGroups[day as Weekday];
     if (!dayLines || dayLines.length === 0) continue;
