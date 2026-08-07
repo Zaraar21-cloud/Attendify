@@ -6,6 +6,7 @@ import { parseStructuredOcr } from "@/lib/ocr";
 import Header from "@/components/Header";
 import ImageUpload from "@/components/ImageUpload";
 import TimetableGrid from "@/components/TimetableGrid";
+import HolidayManager from "@/components/HolidayManager";
 
 function AdminApp() {
   const { setTimetable } = useAttendify();
@@ -45,6 +46,10 @@ function AdminApp() {
           </div>
 
           <div className="animate-fade" style={{ animationDelay: "0.05s" }}>
+            <HolidayManager />
+          </div>
+
+          <div className="animate-fade" style={{ animationDelay: "0.10s" }}>
             <TimetableGrid />
           </div>
 

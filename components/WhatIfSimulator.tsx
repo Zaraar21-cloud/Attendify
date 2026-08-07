@@ -11,6 +11,7 @@ import {
   classesOnDay,
   classesNeededForTarget,
 } from "@/lib/engine";
+import { supabase } from "@/lib/supabase";
 
 type DayMode = "neutral" | "skip" | "attend";
 type ClassMode = "neutral" | "skip" | "attend";
@@ -66,8 +67,27 @@ export default function WhatIfSimulator() {
   const daysInMonth = useMemo(() => new Date(currentYear, currentMonth + 1, 0).getDate(), [currentYear, currentMonth]);
   const monthDays = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth]);
 
+  const [holidays, setHolidays] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchHolidays = async () => {
+      const { data, error } = await supabase.from("holidays").select("date");
+      if (!error && data) {
+        setHolidays(data.map((h: { date: string }) => h.date));
+      }
+    };
+    fetchHolidays();
+  }, []);
+
   const isDayDisabled = useCallback((dayNum: number) => {
     const date = new Date(currentYear, currentMonth, dayNum);
+    
+    // Format to YYYY-MM-DD for holiday checking
+    // Use local time, so date.getFullYear() etc instead of toISOString() which uses UTC
+    const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    
+    if (holidays.includes(formattedDate)) return true; // Holiday
+
     const dayOfWeek = date.getDay(); // 0 is Sunday, 6 is Saturday
 
     if (dayNum < currentDate) return true; // Past day
@@ -81,7 +101,7 @@ export default function WhatIfSimulator() {
     }
 
     return false;
-  }, [currentYear, currentMonth, currentDate, currentHour]);
+  }, [currentYear, currentMonth, currentDate, currentHour, holidays]);
   const monthSimClasses = useMemo(() => {
     let skipped = 0;
     let attended = 0;
