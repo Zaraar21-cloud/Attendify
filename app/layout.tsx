@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Attendify — Attendance Calculator & Timetable Manager",
+  title: "Attendify ",
   description:
     "Upload your class timetable, track attendance, calculate safe bunk limits, and run what-if simulations. Built with a bold Neubrutalist design.",
 };
