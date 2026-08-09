@@ -324,6 +324,11 @@ export default function WhatIfSimulator() {
     6: "Saturday",
   };
 
+  const isTodayHoliday = useMemo(() => {
+    const formattedToday = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate).padStart(2, '0')}`;
+    return holidays.includes(formattedToday);
+  }, [currentYear, currentMonth, currentDate, holidays]);
+
   const todayIndex = new Date().getDay();
   const todayName = WEEKDAY_MAP[todayIndex] ?? null;
   const todaySlots: TimeSlot[] = todayName ? (timetable[todayName] ?? []) : [];
@@ -843,6 +848,13 @@ export default function WhatIfSimulator() {
 
             let isWeeklyDisabled = classes === 0;
 
+            const diffToDay = WEEKDAY_INDEX[day] - currentDayIndex;
+            const dayDate = new Date(currentYear, currentMonth, currentDate + diffToDay);
+            const formattedDayDate = `${dayDate.getFullYear()}-${String(dayDate.getMonth() + 1).padStart(2, '0')}-${String(dayDate.getDate()).padStart(2, '0')}`;
+            if (holidays.includes(formattedDayDate)) {
+              isWeeklyDisabled = true;
+            }
+
             // Grey out 2nd and 4th Saturday for the weekly view
             if (day === "Saturday") {
               const diffToSat = 6 - currentDayIndex;
@@ -1015,7 +1027,7 @@ export default function WhatIfSimulator() {
         )}
 
         {/* ─── Today's Classes Section ─────────────────────────────────────── */}
-        {todayName && todaySlots.length > 0 && (
+        {todayName && todaySlots.length > 0 && !isTodayHoliday && (
           <div className="mt-6 pt-5 border-t-[3px] border-brutal-black/10">
             <h3 className="font-heading text-base font-extrabold text-brutal-black mb-3 flex items-center gap-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-md border-[2px] border-brutal-black bg-accent-yellow text-[10px] font-mono font-bold shadow-brutal-sm">
@@ -1193,8 +1205,25 @@ export default function WhatIfSimulator() {
           </div>
         )}
 
+        {/* Holiday today message */}
+        {todayName && isTodayHoliday && (
+          <div className="mt-6 pt-5 border-t-[3px] border-brutal-black/10">
+            <h3 className="font-heading text-base font-extrabold text-brutal-black mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md border-[2px] border-brutal-black bg-accent-yellow text-[10px] font-mono font-bold shadow-brutal-sm">
+                📅
+              </span>
+              Today&apos;s Classes
+            </h3>
+            <div className="rounded-md border-[2px] border-dashed border-brutal-black/20 py-4 text-center">
+              <p className="font-mono text-xs text-brutal-black/40">
+                It&apos;s a holiday today! 🎉
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* No classes today message */}
-        {todayName && todaySlots.length === 0 && (
+        {todayName && todaySlots.length === 0 && !isTodayHoliday && (
           <div className="mt-6 pt-5 border-t-[3px] border-brutal-black/10">
             <h3 className="font-heading text-base font-extrabold text-brutal-black mb-3 flex items-center gap-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-md border-[2px] border-brutal-black bg-accent-yellow text-[10px] font-mono font-bold shadow-brutal-sm">
