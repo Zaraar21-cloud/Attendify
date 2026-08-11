@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useAttendify } from "@/lib/context";
 import { type Weekday, WEEKDAYS } from "@/lib/types";
 import {
@@ -17,6 +17,8 @@ export default function WhatIfSimulator() {
   const { attendance, timetable } = state;
 
   const [brushMode, setBrushMode] = useState<BrushMode>("select");
+  const [showBrush, setShowBrush] = useState(true);
+  const calendarRef = useRef<HTMLDivElement>(null);
 
   // selectedDay is a day number in the current month
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -46,6 +48,21 @@ export default function WhatIfSimulator() {
       }
     };
     fetchHolidays();
+  }, []);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowBrush(entry.isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+
+    if (calendarRef.current) {
+      observer.observe(calendarRef.current);
+    }
+
+    return () => observer.disconnect();
   }, []);
 
   const isDayDisabled = useCallback((dayNum: number) => {
@@ -259,6 +276,8 @@ export default function WhatIfSimulator() {
       } else if (skipCount > 0 || attendCount > 0) {
         // Partial customization (blue)
         base = "bg-card-blue text-white border-brutal-black shadow-brutal-sm";
+      } else if (isRequired) {
+        base = "bg-orange-200 text-brutal-black border-brutal-black hover:border-orange-400 hover:shadow-brutal-sm";
       }
     } else if (isRequired) {
       base = "bg-orange-200 text-brutal-black border-brutal-black hover:border-orange-400 hover:shadow-brutal-sm";
@@ -310,7 +329,7 @@ export default function WhatIfSimulator() {
         <div className="flex flex-col lg:flex-row justify-center gap-6 mb-6">
             
           {/* LEFT: CALENDAR */}
-          <div className="flex-1">
+          <div className="flex-1" ref={calendarRef}>
             <div className="touch-none max-w-[320px] mx-auto">
               <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
                 {/* Weekday Headers */}
@@ -376,7 +395,7 @@ export default function WhatIfSimulator() {
           </div>
 
           {/* RIGHT: SELECTED DAY PANEL */}
-          <div className="flex-1 lg:max-w-[320px]">
+          <div className="flex-1 lg:max-w-[320px] flex flex-col">
             <h3 className="font-heading text-base font-extrabold text-brutal-black flex flex-wrap items-center justify-between gap-2 mb-4 mt-6 lg:mt-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="flex items-center gap-2">
@@ -411,7 +430,7 @@ export default function WhatIfSimulator() {
             </h3>
 
             {!selectedDay ? (
-               <div className="rounded-md border-[2px] border-dashed border-brutal-black/20 py-8 text-center bg-cream/30 h-full flex items-center justify-center min-h-[200px]">
+               <div className="rounded-md border-[2px] border-dashed border-brutal-black/20 py-8 text-center bg-cream/30 flex-1 flex items-center justify-center min-h-[200px]">
                   <p className="font-mono text-xs text-brutal-black/40 px-4">
                     Use the 'Select' brush and tap a day in the calendar to customize its classes.
                   </p>
@@ -566,7 +585,9 @@ export default function WhatIfSimulator() {
       </div>
 
       {/* Floating Brush Toggle */}
-      <div className="fixed bottom-24 right-6 z-50 flex flex-col gap-2 rounded-md border-[3px] border-brutal-black bg-white p-2 shadow-brutal pointer-events-auto">
+      <div className={`fixed bottom-24 right-6 z-50 flex flex-col gap-2 rounded-md border-[3px] border-brutal-black bg-white p-2 shadow-brutal pointer-events-auto transition-all duration-300 ${
+        showBrush ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none lg:opacity-100 lg:translate-y-0 lg:pointer-events-auto"
+      }`}>
         <p className="text-center font-mono text-[10px] font-bold text-brutal-black/50 uppercase mb-1">
           Brush Mode
         </p>
