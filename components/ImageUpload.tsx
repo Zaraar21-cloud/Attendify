@@ -43,8 +43,17 @@ export default function ImageUpload({
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showUpload, setShowUpload] = useState(true);
 
   const { state } = useAttendify();
+
+  const hasInitialLoaded = useRef(false);
+  useEffect(() => {
+    if (!hasInitialLoaded.current && state.timetable && Object.keys(state.timetable).length > 0) {
+      setShowUpload(false);
+      hasInitialLoaded.current = true;
+    }
+  }, [state.timetable]);
   const [isSaving, setIsSaving] = useState(false);
 
   // Dropdown states
@@ -53,15 +62,16 @@ export default function ImageUpload({
   const [section, setSection] = useState<string>("A");
   const [isFetching, setIsFetching] = useState(false);
   const [showCollegeNotice, setShowCollegeNotice] = useState(false);
+  const [isRestored, setIsRestored] = useState(false);
 
   const availableSections = useMemo(() => getAvailableSections(year, branch), [year, branch]);
 
   // Ensure section is valid for the current year/branch
   useEffect(() => {
-    if (!availableSections.includes(section)) {
+    if (isRestored && !availableSections.includes(section)) {
       setSection(availableSections[0]);
     }
-  }, [availableSections, section]);
+  }, [availableSections, section, isRestored]);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -76,15 +86,17 @@ export default function ImageUpload({
     } catch (e) {
       console.error("Failed to load dropdown selections", e);
     }
+    setIsRestored(true);
   }, []);
 
   // Save to localStorage on change
   useEffect(() => {
+    if (!isRestored) return;
     localStorage.setItem(
       "attendify-dropdowns",
       JSON.stringify({ year, branch, section })
     );
-  }, [year, branch, section]);
+  }, [year, branch, section, isRestored]);
 
   const handleFetchTimetable = async () => {
     setIsFetching(true);
@@ -102,6 +114,7 @@ export default function ImageUpload({
       if (fetchError) {
         if (fetchError.code === "PGRST116") {
           setError(`No timetable found for ${year} Year, ${branch}, Section ${section}.`);
+          setShowUpload(true);
         } else {
           throw fetchError;
         }
@@ -109,6 +122,7 @@ export default function ImageUpload({
         if (onTimetableFetched) {
           onTimetableFetched(data.timetable);
           setSuccessMsg("Timetable loaded successfully!");
+          setShowUpload(false);
           setTimeout(() => setSuccessMsg(null), 3000);
         }
       }
@@ -333,12 +347,32 @@ export default function ImageUpload({
         </div>
       )}
 
-      <div className="flex items-center gap-4 mb-6">
-        <div className="h-[2px] flex-1 bg-brutal-black/10"></div>
-        <span className="font-mono text-xs font-bold text-brutal-black/40">OR UPLOAD IMAGE</span>
-        <div className="h-[2px] flex-1 bg-brutal-black/10"></div>
+      <div 
+        className="flex items-center gap-4 mb-4 cursor-pointer group select-none"
+        onClick={() => setShowUpload((prev) => !prev)}
+      >
+        <div className="h-[2px] flex-1 bg-brutal-black/10 transition-colors group-hover:bg-brutal-black/30"></div>
+        <span className="font-mono text-xs font-bold text-brutal-black/40 flex items-center gap-1 group-hover:text-brutal-black transition-colors">
+          OR UPLOAD IMAGE
+          <svg
+            className={`w-4 h-4 transition-transform duration-300 ${showUpload ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+          </svg>
+        </span>
+        <div className="h-[2px] flex-1 bg-brutal-black/10 transition-colors group-hover:bg-brutal-black/30"></div>
       </div>
 
+      <div 
+        className={`grid transition-all duration-300 ease-in-out ${
+          showUpload ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="pb-2">
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -429,6 +463,9 @@ export default function ImageUpload({
           </button>
         </div>
       )}
+          </div>
+        </div>
+      </div>
 
     </section>
   );

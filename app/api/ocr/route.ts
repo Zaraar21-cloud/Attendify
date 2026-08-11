@@ -5,7 +5,25 @@ import path from "path";
 import os from "os";
 
 // Disabling body parsing since we are using formData() which NextRequest supports natively.
-export const maxDuration = 60; // OCR takes time, let's give it up to 60 seconds if deployed (only applies to pro/enterprise, but good practice).
+export const maxDuration = 120; // OCR takes time, let's give it up to 120 seconds if deployed (only applies to pro/enterprise, but good practice).
+
+/**
+ * Detect the correct python command for the current platform.
+ * Tries "python" first (Windows default), then "python3" (Linux/macOS).
+ */
+async function getPythonCommand(): Promise<string> {
+  return new Promise((resolve) => {
+    exec("python --version", { timeout: 5000 }, (error) => {
+      if (!error) {
+        resolve("python");
+      } else {
+        exec("python3 --version", { timeout: 5000 }, (error2) => {
+          resolve(error2 ? "python" : "python3"); // fallback to "python" even if both fail
+        });
+      }
+    });
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,16 +45,21 @@ export async function POST(req: NextRequest) {
     // Resolve python script path
     const pythonScriptPath = path.resolve(process.cwd(), "better_ocr.py");
 
-    // Execute python script
+    // Detect python command
+    const pythonCmd = await getPythonCommand();
+
+    // Execute python script with a 45-second timeout
     return new Promise<NextResponse>((resolve) => {
       exec(
-        `python "${pythonScriptPath}" "${tempFilePath}" --json`,
+        `${pythonCmd} "${pythonScriptPath}" "${tempFilePath}" --json`,
         {
           env: {
             ...process.env,
             PYTHONIOENCODING: "utf8", // Ensure UTF-8 output for stdout
           },
           cwd: process.cwd(),
+          timeout: 115000, // 115 second timeout to prevent hanging
+          maxBuffer: 1024 * 1024 * 5, // 5MB buffer for large outputs
         },
         (error, stdout, stderr) => {
           // Cleanup temporary file
@@ -47,11 +70,18 @@ export async function POST(req: NextRequest) {
           }
 
           if (error) {
-            console.error("Python OCR Error:", error);
-            console.error("Stderr:", stderr);
+            console.error("Python OCR Error:", error.message);
+            if (stderr) console.error("Stderr:", stderr);
+            
+            // Provide more specific error messages
+            const isTimeout = error.killed || (error as any).signal === "SIGTERM";
+            const errorMsg = isTimeout 
+              ? "OCR processing timed out. Try a smaller or clearer image."
+              : "Failed to process image with OCR.";
+            
             resolve(
               NextResponse.json(
-                { error: "Failed to process image with OCR." },
+                { error: errorMsg },
                 { status: 500 }
               )
             );
@@ -59,16 +89,14 @@ export async function POST(req: NextRequest) {
           }
 
           try {
-            // Stdout could have multiple lines if something else logged, but we try to parse the last line or find the array.
-            // But we suppressed other logs with json_only, so stdout should just be the JSON string.
-            // EasyOCR sometimes outputs warnings to stderr even when successful, we ignore them unless there's an error.
-            
-            // PyTorch might output warning logs to stdout (e.g. pin_memory warning), so we extract the JSON array.
+            // PyTorch/EasyOCR may output warning logs to stdout, so we extract
+            // the JSON array/object by scanning from the last line upward.
             const lines = stdout.trim().split('\n');
             let jsonStr = "";
             for (let i = lines.length - 1; i >= 0; i--) {
-                if (lines[i].startsWith("[") || lines[i].startsWith("{")) {
-                    jsonStr = lines[i];
+                const trimmed = lines[i].trim();
+                if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+                    jsonStr = trimmed;
                     break;
                 }
             }
@@ -85,7 +113,9 @@ export async function POST(req: NextRequest) {
               resolve(NextResponse.json({ data }, { status: 200 }));
             }
           } catch (parseError) {
-            console.error("Failed to parse Python output:", stdout);
+            console.error("Failed to parse Python output.");
+            console.error("Stdout:", stdout);
+            if (stderr) console.error("Stderr:", stderr);
             resolve(
               NextResponse.json(
                 { error: "Invalid response from OCR engine." },
