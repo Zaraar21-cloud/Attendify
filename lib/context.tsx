@@ -22,6 +22,7 @@ import { calcPercentage } from "./engine";
 interface AttendifyState {
   timetable: Timetable;
   attendance: AttendanceStats;
+  lastLogin: string | null; // ISO timestamp of last visit
   isLoaded: boolean; // hydration flag
 }
 
@@ -33,6 +34,7 @@ const DEFAULT_STATE: AttendifyState = {
     currentPercentage: 0,
     targetPercentage: 75,
   },
+  lastLogin: null,
   isLoaded: false,
 };
 
@@ -46,7 +48,8 @@ type Action =
   | { type: "UPDATE_SLOT"; day: Weekday; slot: TimeSlot }
   | { type: "SET_ATTENDANCE_RATIO"; attended: number; total: number }
   | { type: "SET_ATTENDANCE_PERCENTAGE"; percentage: number }
-  | { type: "SET_TARGET"; target: number };
+  | { type: "SET_TARGET"; target: number }
+  | { type: "SET_LAST_LOGIN"; timestamp: string };
 
 function reducer(state: AttendifyState, action: Action): AttendifyState {
   switch (action.type) {
@@ -118,6 +121,9 @@ function reducer(state: AttendifyState, action: Action): AttendifyState {
         },
       };
 
+    case "SET_LAST_LOGIN":
+      return { ...state, lastLogin: action.timestamp };
+
     default:
       return state;
   }
@@ -135,6 +141,7 @@ interface AttendifyContextValue {
   setAttendanceRatio: (attended: number, total: number) => void;
   setAttendancePercentage: (pct: number) => void;
   setTarget: (target: number) => void;
+  setLastLogin: (timestamp: string) => void;
 }
 
 const AttendifyContext = createContext<AttendifyContextValue | null>(null);
@@ -142,13 +149,17 @@ const AttendifyContext = createContext<AttendifyContextValue | null>(null);
 // ─── localStorage Keys ───────────────────────────────────────────────────────
 
 const STORAGE_KEY = "attendify-data";
+const LAST_LOGIN_KEY = "attendify-last-login";
 
 function loadFromStorage(): Partial<AttendifyState> | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    const lastLogin = localStorage.getItem(LAST_LOGIN_KEY);
+    if (!raw && !lastLogin) return null;
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (lastLogin) parsed.lastLogin = lastLogin;
+    return parsed;
   } catch {
     return null;
   }
@@ -159,6 +170,9 @@ function saveToStorage(state: AttendifyState) {
   try {
     const { timetable, attendance } = state;
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ timetable, attendance }));
+    if (state.lastLogin) {
+      localStorage.setItem(LAST_LOGIN_KEY, state.lastLogin);
+    }
   } catch {
     // Storage full or unavailable
   }
@@ -213,6 +227,10 @@ export function AttendifyProvider({ children }: { children: React.ReactNode }) {
     (target: number) => dispatch({ type: "SET_TARGET", target }),
     []
   );
+  const setLastLogin = useCallback(
+    (timestamp: string) => dispatch({ type: "SET_LAST_LOGIN", timestamp }),
+    []
+  );
 
   const value = useMemo(
     () => ({
@@ -225,8 +243,9 @@ export function AttendifyProvider({ children }: { children: React.ReactNode }) {
       setAttendanceRatio,
       setAttendancePercentage,
       setTarget,
+      setLastLogin,
     }),
-    [state, setTimetable, addSlot, removeSlot, updateSlot, setAttendanceRatio, setAttendancePercentage, setTarget]
+    [state, setTimetable, addSlot, removeSlot, updateSlot, setAttendanceRatio, setAttendancePercentage, setTarget, setLastLogin]
   );
 
   return (

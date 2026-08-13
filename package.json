@@ -1,6 +1,6 @@
 {
   "name": "attendify",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Class Attendance Calculator & Timetable Ingestion Engine featuring Neubrutalism UI and OCR.",
   "license": "MIT",
   "keywords": [

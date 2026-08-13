@@ -38,13 +38,17 @@ export default function WhatIfSimulator() {
   const daysInMonth = useMemo(() => new Date(currentYear, currentMonth + 1, 0).getDate(), [currentYear, currentMonth]);
   const monthDays = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth]);
 
-  const [holidays, setHolidays] = useState<string[]>([]);
+  const [holidays, setHolidays] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const fetchHolidays = async () => {
-      const { data, error } = await supabase.from("holidays").select("date");
+      const { data, error } = await supabase.from("holidays").select("date, name");
       if (!error && data) {
-        setHolidays(data.map((h: { date: string }) => h.date));
+        const holidayMap: Record<string, string> = {};
+        data.forEach((h: { date: string, name: string }) => {
+          holidayMap[h.date] = h.name;
+        });
+        setHolidays(holidayMap);
       }
     };
     fetchHolidays();
@@ -68,7 +72,7 @@ export default function WhatIfSimulator() {
   const isDayDisabled = useCallback((dayNum: number) => {
     const date = new Date(currentYear, currentMonth, dayNum);
     const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-    if (holidays.includes(formattedDate)) return true;
+    if (holidays[formattedDate]) return true;
     const dayOfWeek = date.getDay();
     if (dayNum < currentDate) return true;
     if (dayNum === currentDate && currentHour >= 16) return true;
@@ -79,6 +83,12 @@ export default function WhatIfSimulator() {
     }
     return false;
   }, [currentYear, currentMonth, currentDate, currentHour, holidays]);
+
+  const getHolidayReason = useCallback((dayNum: number) => {
+    const date = new Date(currentYear, currentMonth, dayNum);
+    const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return holidays[formattedDate];
+  }, [currentYear, currentMonth, holidays]);
 
   const WEEKDAY_MAP: Record<number, Weekday> = useMemo(() => ({
     1: "Monday", 2: "Tuesday", 3: "Wednesday", 4: "Thursday", 5: "Friday", 6: "Saturday",
@@ -185,19 +195,39 @@ export default function WhatIfSimulator() {
     setDragAction(action);
 
     setAllClassesForDay(dayNum, action === "erase" ? "neutral" : brushMode as ClassMode);
+    if (action === "erase") {
+      setSelectedDay(null);
+    } else {
+      setSelectedDay(dayNum);
+    }
 
   }, [isDayDisabled, brushMode, getClassesForDay, monthDayClassSelections, setAllClassesForDay]);
 
   const handleDayMouseEnter = useCallback((dayNum: number) => {
     if (!isMouseDown || isDayDisabled(dayNum) || !dragAction || brushMode === "select") return;
     setAllClassesForDay(dayNum, dragAction === "erase" ? "neutral" : brushMode as ClassMode);
+    if (dragAction === "erase") {
+      setSelectedDay(null);
+    } else {
+      setSelectedDay(dayNum);
+    }
   }, [isMouseDown, dragAction, brushMode, isDayDisabled, setAllClassesForDay]);
 
-  // Global mouse up
+  // Global mouse up & pointer down
   useEffect(() => {
     const handleMouseUp = () => {
       setIsMouseDown(false);
       setDragAction(null);
+    };
+
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return;
+      const target = e.target as HTMLElement;
+      if (target.closest("button")) return;
+      if (target.closest("#selected-day-panel")) return;
+      if (target.closest("#floating-brush")) return;
+      
+      setSelectedDay((prev) => (prev !== null ? null : prev));
     };
 
     const handleTouchMove = (e: TouchEvent) => {
@@ -217,10 +247,12 @@ export default function WhatIfSimulator() {
     };
 
     window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("touchend", handleMouseUp);
     window.addEventListener("touchmove", handleTouchMove, { passive: false });
     return () => {
       window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("touchend", handleMouseUp);
       window.removeEventListener("touchmove", handleTouchMove);
     };
@@ -349,6 +381,7 @@ export default function WhatIfSimulator() {
                   const disabled = isDayDisabled(dayNum);
                   const isRequired = requiredDaysToHighlight.has(dayNum);
                   const bgClass = getDayColorClass(dayNum, disabled, isRequired);
+                  const holidayReason = getHolidayReason(dayNum);
 
                   // Compute indicator icon
                   let icon = null;
@@ -369,6 +402,7 @@ export default function WhatIfSimulator() {
                       onPointerEnter={() => handleDayMouseEnter(dayNum)}
                       data-month-day={dayNum}
                       disabled={disabled}
+                      title={holidayReason || undefined}
                       className={`relative aspect-square rounded-md border-[2px] flex flex-col items-center justify-center font-mono transition-all select-none ${bgClass}`}
                     >
                       <span className="text-sm sm:text-base font-extrabold">{dayNum}</span>
@@ -395,7 +429,7 @@ export default function WhatIfSimulator() {
           </div>
 
           {/* RIGHT: SELECTED DAY PANEL */}
-          <div className="flex-1 lg:max-w-[320px] flex flex-col">
+          <div id="selected-day-panel" className="flex-1 lg:max-w-[320px] flex flex-col">
             <h3 className="font-heading text-base font-extrabold text-brutal-black flex flex-wrap items-center justify-between gap-2 mb-4 mt-6 lg:mt-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="flex items-center gap-2">
@@ -585,7 +619,7 @@ export default function WhatIfSimulator() {
       </div>
 
       {/* Floating Brush Toggle */}
-      <div className={`fixed bottom-24 right-6 z-50 flex flex-col gap-2 rounded-md border-[3px] border-brutal-black bg-white p-2 shadow-brutal pointer-events-auto transition-all duration-300 ${
+      <div id="floating-brush" className={`fixed bottom-24 right-6 z-50 flex flex-col gap-2 rounded-md border-[3px] border-brutal-black bg-white p-2 shadow-brutal pointer-events-auto transition-all duration-300 ${
         showBrush ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none lg:opacity-100 lg:translate-y-0 lg:pointer-events-auto"
       }`}>
         <p className="text-center font-mono text-[10px] font-bold text-brutal-black/50 uppercase mb-1">

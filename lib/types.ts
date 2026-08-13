@@ -58,6 +58,20 @@ export function createEmptyTimetable(): Timetable {
   };
 }
 
+// ─── Catch-Up Day (for missed-classes reconciliation) ────────────────────────
+export interface CatchUpDay {
+  date: string;           // ISO date string "YYYY-MM-DD"
+  weekday: Weekday;
+  totalClasses: number;   // from timetable for that weekday
+  attendedClasses: number; // user-entered (defaults to totalClasses)
+}
+
+export interface CatchUpResult {
+  days: CatchUpDay[];
+  totalClassesPassed: number;
+  totalAttended: number;
+}
+
 // ─── ID Generator ────────────────────────────────────────────────────────────
 let counter = 0;
 export function generateSlotId(): string {

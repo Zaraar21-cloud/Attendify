@@ -1,6 +1,7 @@
 import {
   type AttendanceStats,
   type CalculationResult,
+  type CatchUpDay,
   type SimulationResult,
   type Timetable,
   type Weekday,
@@ -371,4 +372,103 @@ export function simulateClassChanges(
     extraDaysNeeded,
     message,
   };
+}
+
+// ─── Catch-Up Gap Calculation ───────────────────────────────────────────────
+
+/**
+ * Check whether a given Saturday is the 2nd or 4th Saturday of its month.
+ */
+function isSecondOrFourthSaturday(date: Date): boolean {
+  if (date.getDay() !== 6) return false; // not a Saturday
+  const dayOfMonth = date.getDate();
+  const weekOfMonth = Math.ceil(dayOfMonth / 7);
+  return weekOfMonth === 2 || weekOfMonth === 4;
+}
+
+/**
+ * Format a Date to "YYYY-MM-DD" string.
+ */
+function toISODate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Map JS Date.getDay() (0=Sun..6=Sat) to our Weekday type.
+ * Returns null for Sunday (excluded).
+ */
+function jsDateToWeekday(date: Date): Weekday | null {
+  const map: Record<number, Weekday> = {
+    1: "Monday",
+    2: "Tuesday",
+    3: "Wednesday",
+    4: "Thursday",
+    5: "Friday",
+    6: "Saturday",
+  };
+  return map[date.getDay()] ?? null;
+}
+
+/**
+ * Compute the list of class-days that have fully elapsed between
+ * `lastLogin` (exclusive of that day) and `now` (exclusive of today).
+ *
+ * Excludes:
+ *  - Sundays
+ *  - 2nd and 4th Saturdays of each month
+ *  - Any date in the `holidays` array (ISO "YYYY-MM-DD" strings)
+ *
+ * Each returned CatchUpDay has `attendedClasses` defaulting to `totalClasses`
+ * (assume full attendance unless the user overrides).
+ */
+export function computeClassGap(
+  lastLogin: Date,
+  now: Date,
+  timetable: Timetable,
+  holidays: string[] = []
+): CatchUpDay[] {
+  const result: CatchUpDay[] = [];
+  const holidaySet = new Set(holidays);
+
+  // Start from the day after lastLogin
+  const cursor = new Date(lastLogin);
+  cursor.setHours(0, 0, 0, 0);
+  cursor.setDate(cursor.getDate() + 1);
+
+  // End before today (only fully-elapsed days)
+  const endDate = new Date(now);
+  endDate.setHours(0, 0, 0, 0);
+
+  while (cursor < endDate) {
+    const isoDate = toISODate(cursor);
+
+    // Skip Sundays
+    if (cursor.getDay() !== 0) {
+      // Skip 2nd and 4th Saturdays
+      if (!isSecondOrFourthSaturday(cursor)) {
+        // Skip holidays
+        if (!holidaySet.has(isoDate)) {
+          const weekday = jsDateToWeekday(cursor);
+          if (weekday) {
+            const slots = timetable[weekday] ?? [];
+            if (slots.length > 0) {
+              result.push({
+                date: isoDate,
+                weekday,
+                totalClasses: slots.length,
+                attendedClasses: slots.length, // default: fully attended
+              });
+            }
+          }
+        }
+      }
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return result;
 }
